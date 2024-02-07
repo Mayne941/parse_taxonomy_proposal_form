@@ -10,6 +10,7 @@ class Strip:
         self.in_dir = in_dir
         self.out_dir = out_dir
         self.attribs = {}
+        self.which_section = 2
         self.section_fns = {
             "Title": self.populate_title,
             "Code assigned:": self.populate_id,
@@ -18,11 +19,12 @@ class Strip:
             "Sub-committee": self.get_subcommittee,
             "List the ICTV Study Group(s) that have seen or who have involved in creating this proposal.": self.get_study_groups,
             "Submission date": self.get_subm_date,
-            "Optional – complete if formally voted on by an ICTV Study Group": self.populate_group_vote,
-            "Executive Committee Meeting Decision code": self.get_meeting_decision,
-            "Comments from the Executive Committee": self.get_comments,
-            "Response of proposer": self.get_response,
-            "Revision date": self.get_rev_date
+            # "Optional – complete if formally voted on by an ICTV Study Group": self.populate_group_vote,
+            # "Executive Committee Meeting Decision code": self.get_meeting_decision,
+            # "Comments from the Executive Committee": self.get_comments,
+            # "Response of proposer": self.get_response,
+            "Revision date": self.get_rev_date,
+            "Abstract": self.get_abstract
         }
 
     def populate_title(self, row, cell_idx, *_):
@@ -47,7 +49,7 @@ class Strip:
                 '''End of table'''
                 break
             counter += 1
-            if row_text == ["", "", ""]: 
+            if row_text == ["", "", ""]:  
                 '''Blank line'''
                 continue
             else:
@@ -158,6 +160,27 @@ class Strip:
     def get_rev_date(self, row, cell_idx, row_idx, table):
         self.attribs["Revision_date"] = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs]
 
+    def get_abstract(self, row, cell_idx, row_idx, table):
+        abstract = []
+        if [i.text for i in table.rows[row_idx +1].cells] == ['Brief description of current situation:       \n\n\nProposed changes:     \n\n\nJustification:      \n\n']:
+            # TODO I've guessed what a blank box looks like: needs to be tested + made more robust
+            return 
+        for para in table.rows[row_idx + 1].cells[0].paragraphs:
+            for i in para.runs:
+                text = i.text 
+                its = i.font.italic
+                if its:
+                    text = f"<i>{text}<\i>"
+                abstract.append(text)
+
+        if self.which_section == 2:
+            self.attribs["Tp_type"] = ["Non-taxonomic proposal"]
+
+        elif self.which_section == 3:
+            assert not "Tp_type" in self.attribs.keys(), "Error: User has filled in both section 2 + 3"
+            self.attribs["Tp_type"] = ["Taxonomic proposal"]
+        self.attribs["Tp_abstract"] = abstract        
+
     def make_summary(self):
         doc = Document()
         for title, content in self.attribs.items():
@@ -180,7 +203,7 @@ class Strip:
                     
             p.add_run("\n")
 
-        doc.save(f"{self.out_dir}{self.fname.split('.')[0]}.docx")
+        doc.save(f"{self.out_dir}{self.attribs['Id_code'][0]}.docx")
 
     def main(self):
         document = Document(f"{self.in_dir}{self.fname}")
@@ -191,8 +214,11 @@ class Strip:
                         para_header = "".join([i.text for i in para.runs]).strip(" ")
                         if para_header in self.section_fns.keys():
                             self.section_fns[para_header](row, cell_idx, row_idx, table)
+                        if para_header == "Abstract":
+                            '''Increment index for measuring which section's abstract is being parsed'''
+                            self.which_section = 3
 
-        with open(f"{self.out_dir}{self.fname.split('.')[0]}.json", "w") as outfile: 
+        with open(f"{self.out_dir}{self.attribs['Id_code'][0]}.json", "w") as outfile: 
             json.dump(self.attribs, outfile)                
 
         self.make_summary()
