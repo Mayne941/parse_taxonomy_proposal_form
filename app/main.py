@@ -40,7 +40,7 @@ class Strip:
     def populate_title(self, row, cell_idx, *_) -> None:
         '''Populate title'''
         try:
-            title_text = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.strip().replace(" ","").text == ""]
+            title_text = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.text.strip().replace(" ","") == ""]
             title_it_mask = [i.font.italic for i in row.cells[cell_idx+1].paragraphs[0].runs]
             it_indices = np.argwhere(np.array(title_it_mask) != None)
             for i in it_indices:
@@ -53,7 +53,7 @@ class Strip:
     def populate_id(self, row, cell_idx, *_):
         '''Get ID code'''
         try:
-            code = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.strip().replace(" ","").text == ""]
+            code = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.text.strip().replace(" ","") == ""]
             assert code != []
             self.attribs["Id_code"] = code
         except:
@@ -95,7 +95,7 @@ class Strip:
     def get_main_author(self, _row, _cell_idx, row_idx, table) -> None:
         '''Get primary author'''
         try:
-            author = [i.text for i in table.rows[row_idx + 1].cells if not i.strip().replace(" ","").text == ""]
+            author = [i.text for i in table.rows[row_idx + 1].cells if not i.text.strip().replace(" ","") == ""]
             assert author != []
             self.attribs["Corr_author"] = author
         except:
@@ -133,7 +133,7 @@ class Strip:
     def get_study_groups(self, _row, _cell_idx, row_idx, table) -> None:
         '''Get study group/s'''
         try:
-            groups = [i.text for i in table.rows[row_idx + 1].cells if not i.strip().replace(" ","").text == ""]
+            groups = [i.text for i in table.rows[row_idx + 1].cells if not i.text.strip().replace(" ","") == ""]
             assert groups != []
             self.attribs["Study_groups"] = groups
         except:
@@ -142,7 +142,7 @@ class Strip:
     def get_subm_date(self, row, cell_idx, *_) -> None:
         '''Get submission date'''
         try:
-            subm_date = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.strip().replace(" ","").text == ""]
+            subm_date = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.text.strip().replace(" ","") == ""]
             assert subm_date != []
             self.attribs["Submission_date"] = subm_date 
         except:
@@ -229,7 +229,7 @@ class Strip:
     def get_rev_date(self, row, cell_idx, *_) -> None:
         '''Get revision date'''
         try:
-            rev_date = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.strip().replace(" ","").text == ""]
+            rev_date = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.text.strip().replace(" ","") == ""]
             assert rev_date != []
             self.attribs["Revision_date"] = rev_date
         except:
