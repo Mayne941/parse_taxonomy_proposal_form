@@ -28,7 +28,7 @@ class Strip:
             "Abstract": self.get_abstract
         }
 
-    def populate_title(self, row, cell_idx, *_):
+    def populate_title(self, row, cell_idx, *_) -> None:
         '''Populate title'''
         title_text = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs]
         title_it_mask = [i.font.italic for i in row.cells[cell_idx+1].paragraphs[0].runs]
@@ -41,7 +41,7 @@ class Strip:
         '''Get ID code'''
         self.attribs["Id_code"] = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs]
 
-    def populate_authors(self, row, cell_idx, row_idx, table):
+    def populate_authors(self, _row, _cell_idx, row_idx, table) -> None:
         '''Parse author fields incl address and email'''
         authors = []
         counter = 2
@@ -60,11 +60,11 @@ class Strip:
                 authors += row_text
         self.attribs["Authors"] = authors
 
-    def get_main_author(self, row, cell_idx, row_idx, table):
+    def get_main_author(self, _row, _cell_idx, row_idx, table) -> None:
         '''Get primary author'''
         self.attribs["Corr_author"] = [i.text for i in table.rows[row_idx + 1].cells]
 
-    def get_subcommittee(self, row, cell_idx, row_idx, table):
+    def get_subcommittee(self, _row, _cell_idx, row_idx, table) -> None:
         '''Get subcommittee'''
         counter = 0
         subcommittees = []
@@ -86,15 +86,15 @@ class Strip:
                 subcommittees.append(row_text[2])
         self.attribs["Subcommittees"] = subcommittees
 
-    def get_study_groups(self, row, cell_idx, row_idx, table):
+    def get_study_groups(self, _row, _cell_idx, row_idx, table) -> None:
         '''Get study group/s'''
         self.attribs["Study_groups"] = [i.text for i in table.rows[row_idx + 1].cells]
 
-    def get_subm_date(self, row, cell_idx, *_):
+    def get_subm_date(self, row, cell_idx, *_) -> None:
         '''Get submission date'''
         [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs]
 
-    def populate_group_vote(self, row, cell_idx, row_idx, table):
+    def populate_group_vote(self, _row, _cell_idx, row_idx, table) -> None:
         '''Optional: get group vote numbers'''
         if self.do_optional:
             group_vote_responses = []
@@ -113,7 +113,7 @@ class Strip:
                     group_vote_responses.append({"group": row_text[0], "support": row_text[1], "against": row_text[2], "no vote": row_text[3]})
             self.attribs["Study_group_votes"] = group_vote_responses
 
-    def get_meeting_decision(self, row, cell_idx, row_idx, table):
+    def get_meeting_decision(self, _row, _cell_idx, row_idx, table) -> None:
         '''Optional: get decision of subcommittee meeting'''
         if self.do_optional:
             decision = []
@@ -129,14 +129,14 @@ class Strip:
                     decision.append(row_text[0])
             self.attribs["Ex_committee_decision"] = decision
 
-    def get_comments(self, row, cell_idx, row_idx, table):
+    def get_comments(self, _row, _cell_idx, row_idx, table) -> None:
         '''Optional: get author comments'''
         if self.do_optional:
             comments = []
             counter = 1
             while True:
                 try:
-                    row_text = [i.text for i in table.rows[row_idx + counter].cells]
+                    _ = [i.text for i in table.rows[row_idx + counter].cells]
                 except IndexError:
                     '''End of table'''
                     break
@@ -151,14 +151,14 @@ class Strip:
                         comments.append(text)
             self.attribs["Ex_committee_comments"] = comments
 
-    def get_response(self, row, cell_idx, row_idx, table):
+    def get_response(self, _row, _cell_idx, row_idx, table) -> None:
         '''Optional: get subcommittee comments'''
         if self.do_optional:
             response = []
             counter = 1
             while True:
                 try:
-                    row_text = [i.text for i in table.rows[row_idx + counter].cells]
+                    _ = [i.text for i in table.rows[row_idx + counter].cells]
                 except IndexError:
                     '''End of table'''
                     break
@@ -172,11 +172,11 @@ class Strip:
                         response.append(text)
             self.attribs["Proposer_response"] = response
 
-    def get_rev_date(self, row, cell_idx, row_idx, table):
+    def get_rev_date(self, row, cell_idx, *_) -> None:
         '''Get revision date'''
         self.attribs["Revision_date"] = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs]
 
-    def get_abstract(self, row, cell_idx, row_idx, table):
+    def get_abstract(self, _row, _cell_idx, row_idx, table) -> None:
         '''Parse abstract from either S2 or S3'''
         abstract = []
         if [i.text for i in table.rows[row_idx +1].cells] == ['Brief description of current situation:       \n\n\nProposed changes:     \n\n\nJustification:      \n\n']:
@@ -199,7 +199,7 @@ class Strip:
             self.attribs["Tp_type"] = ["Taxonomic proposal"]
         self.attribs["Tp_abstract"] = abstract        
 
-    def make_summary(self):
+    def make_summary(self) -> None:
         '''Dump results to docx file'''
         doc = Document()
         for title, content in self.attribs.items():
@@ -221,15 +221,14 @@ class Strip:
                         p.add_run("\n")
                     
             p.add_run("\n")
-
         doc.save(f"{self.out_dir}{self.attribs['Id_code'][0]}.docx")
 
-    def save_json(self):
+    def save_json(self) -> None:
         '''Dump results to machine-readable format'''
         with open(f"{self.out_dir}{self.attribs['Id_code'][0]}.json", "w") as outfile: 
             json.dump(self.attribs, outfile)                
 
-    def main(self):
+    def main(self) -> None:
         '''Iterate over each table element, call parser functions, save.'''
         document = Document(f"{self.in_dir}{self.fname}")
         for table in document.tables:
