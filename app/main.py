@@ -34,7 +34,13 @@ class Strip:
             "Comments from the Executive Committee": self.get_comments,
             "Response of proposer": self.get_response,
             "Revision date": self.get_rev_date,
-            "Abstract": self.get_abstract
+            "Abstract": self.get_abstract,
+            "Text of General Proposal": self.get_general_proposal,
+            "References": self.get_references,
+            "Text of Taxonomy proposal": self.get_taxonomy_proposal,
+            "Name of accompanying Excel module": self.get_excel_name,
+            "Taxonomic changes proposed": self.get_proposed_changes,
+            "Is any taxon name used here derived from that of a living person (Y/N)": self.get_vanity_names
         }
 
     def populate_title(self, row, cell_idx, *_) -> None:
@@ -262,6 +268,33 @@ class Strip:
         except:
               self.attribs["Tp_abstract"] = self.parser_errors["Tp_abstract"] = self.parser_err_codes[0]
 
+    def collate_errors(self) -> str:
+        '''Create pickle object containing details of errors, if present'''
+        errors = {}
+        for field in self.essential_fields:
+            '''Mark absent essential fields'''
+            if not field in self.attribs.keys():
+                if not "missing_fields" in errors.keys():
+                    errors["missing_fields"] = []
+                errors["missing_fields"].append(field)
+        errors = {**errors, **self.parser_errors}
+
+        if errors:
+            hash = r.getrandbits(128)
+            errors["document_name"] = self.fname 
+            if not "Id_code" in self.attribs.keys():
+                self.attribs["Id_code"] = [f"Not_defined{dt.datetime.now().strftime('%Y%M%d%H%m%s')}"]
+            errors["Id_code"] = self.attribs["Id_code"]
+            pickle.dump(errors, open(f"{hash}.pickle", "wb"))
+            return f"{hash}.pickle"
+        else:
+            return "na"
+        
+    def save_json(self) -> None:
+        '''Dump results to machine-readable format'''
+        with open(f"{self.out_dir}{self.attribs['Id_code'][0]}.json", "w") as outfile: 
+            json.dump(self.attribs, outfile)                
+
     def make_summary(self) -> None:
         '''Dump results to docx file'''
         doc = Document()
@@ -286,32 +319,105 @@ class Strip:
             p.add_run("\n")
         doc.save(f"{self.out_dir}{self.attribs['Id_code'][0]}.docx")
 
-    def save_json(self) -> None:
-        '''Dump results to machine-readable format'''
-        with open(f"{self.out_dir}{self.attribs['Id_code'][0]}.json", "w") as outfile: 
-            json.dump(self.attribs, outfile)                
+    def get_general_proposal(self, _row, _cell_idx, row_idx, table):
+        if do_optional:
+            try: # TODO Lots of similarity with abstract box; try to combine
+                proposal = []
+                if [i.text.replace("Background:","").replace("Proposed changes:","").replace("Justification:","").replace("\n", "").strip().replace(" ","") for i in table.rows[row_idx +1].cells] == ['']:
+                    # RM < TODO UPDATE REPLACES WITH NEW FORM FORMAT
+                    return 
+                for para in table.rows[row_idx + 1].cells[0].paragraphs:
+                    for i in para.runs:
+                        text = i.text 
+                        its = i.font.italic
+                        if its:
+                            text = f"<i>{text}<\i>"
+                        proposal.append(text)
 
-    def collate_errors(self) -> None:
-        '''Create pickle object containing details of errors, if present'''
-        errors = {}
-        for field in self.essential_fields:
-            '''Mark absent essential fields'''
-            if not field in self.attribs.keys():
-                if not "missing_fields" in errors.keys():
-                    errors["missing_fields"] = []
-                errors["missing_fields"].append(field)
-        errors = {**errors, **self.parser_errors}
+                '''Make flag to indicate whether sec 2 or 3 was filled in'''
+                assert proposal != []
+                self.attribs["general_proposal"] = proposal      
+            except:
+                self.attribs["general_proposal"] = self.parser_errors["general_proposal"] = self.parser_err_codes[0]
 
-        if errors:
-            hash = r.getrandbits(128)
-            errors["document_name"] = self.fname 
-            if not "Id_code" in self.attribs.keys():
-                self.attribs["Id_code"] = [f"Not_defined{dt.datetime.now().strftime('%Y%M%d%H%m%s')}"]
-            errors["Id_code"] = self.attribs["Id_code"]
-            pickle.dump(errors, open(f"{hash}.pickle", "wb"))
-            return f"{hash}.pickle"
-        else:
-            return "na"
+    def get_references(self, _row, _cell_idx, row_idx, table):
+        if do_optional:
+            try: # TODO Lots of similarity with abstract box; try to combine
+                refs = []
+                if [i.text.replace("\n", "").strip().replace(" ","") for i in table.rows[row_idx +1].cells] == ['']:
+                    return 
+                for para in table.rows[row_idx + 1].cells[0].paragraphs:
+                    for i in para.runs:
+                        text = i.text 
+                        its = i.font.italic
+                        if its:
+                            text = f"<i>{text}<\i>"
+                        refs.append(text)
+
+                '''Make flag to indicate whether sec 2 or 3 was filled in'''
+                assert refs != []
+                self.attribs["references"] = refs      
+            except:
+                self.attribs["references"] = self.parser_errors["references"] = self.parser_err_codes[0]
+
+    def get_taxonomy_proposal(self, _row, _cell_idx, row_idx, table):
+        if do_optional:
+            try: # TODO Lots of similarity with abstract box; try to combine
+                tp_text = []
+                if [i.text.replace("Taxonomic level(s) affected:","").replace("Description of current taxonomy:","").replace("Proposed taxonomic change(s):","").replace("Justification:","").replace("\n", "").strip().replace(" ","") for i in table.rows[row_idx +1].cells] == ['']:
+                    return # RM < TODO UPDATE REPLACES WITH NEW FORM FORMAT
+                for para in table.rows[row_idx + 1].cells[0].paragraphs:
+                    for i in para.runs:
+                        text = i.text 
+                        its = i.font.italic
+                        if its:
+                            text = f"<i>{text}<\i>"
+                        tp_text.append(text)
+
+                '''Make flag to indicate whether sec 2 or 3 was filled in'''
+                assert tp_text != []
+                self.attribs["taxonomy_proposal"] = tp_text      
+            except:
+                self.attribs["taxonomy_proposal"] = self.parser_errors["taxonomy_proposal"] = self.parser_err_codes[0]
+
+    def get_excel_name(self, _row, _cell_idx, row_idx, table):
+        try:
+            excel_fname = [i.text for i in table.rows[row_idx + 1].cells if not i.text.strip().replace(" ","") == ""]
+            if excel_fname == []:
+                return
+            self.attribs["excel_fname"] = excel_fname
+        except:
+            self.attribs["excel_fname"] = self.parser_errors["excel_fname"] = self.parser_err_codes[1]
+
+    def get_proposed_changes(self, _row, _cell_idx, row_idx, table):
+        if self.do_optional:
+            proposals = []
+            counter = 1
+            while True:
+                try:
+                    row_text = [i.text for i in table.rows[row_idx + counter].cells]
+                except IndexError:
+                    '''End of table'''
+                    break
+                counter += 1
+                if row_text[1] != "":
+                    proposals.append(row_text[0])
+            self.attribs["Proposed_taxonomic_changes"] = proposals
+    
+    def get_vanity_names(self, _row, _cell_idx, row_idx, table):
+        if self.do_optional:
+            vanity_names = []
+            counter = 2
+            while True:
+                try:
+                    row_text = [i.text for i in table.rows[row_idx + counter].cells]
+                except IndexError:
+                    '''End of table'''
+                    break
+                counter += 1
+                if row_text[1] != "":
+                    vanity_names.append(row_text)
+            self.attribs["Taxon_vanity_names"] = vanity_names
 
     def main(self) -> str:
         '''Iterate over each table element, call parser functions, save.'''
@@ -335,7 +441,7 @@ if __name__=="__main__":
     '''Input args'''
     in_dir = "data/"
     out_dir = "output/"
-    do_optional = False
+    do_optional = True
     error_logs = []
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
