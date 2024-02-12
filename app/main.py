@@ -5,10 +5,11 @@ import os
 
 
 class Strip:
-    def __init__(self, fname, in_dir, out_dir) -> None:
+    def __init__(self, fname, in_dir, out_dir, do_optional) -> None:
         self.fname = fname
         self.in_dir = in_dir
         self.out_dir = out_dir
+        self.do_optional = do_optional
         self.attribs = {}
         self.which_section = 2
         self.section_fns = {
@@ -19,10 +20,10 @@ class Strip:
             "Sub-committee": self.get_subcommittee,
             "List the ICTV Study Group(s) that have seen or who have involved in creating this proposal.": self.get_study_groups,
             "Submission date": self.get_subm_date,
-            # "Optional – complete if formally voted on by an ICTV Study Group": self.populate_group_vote,
-            # "Executive Committee Meeting Decision code": self.get_meeting_decision,
-            # "Comments from the Executive Committee": self.get_comments,
-            # "Response of proposer": self.get_response,
+            "Optional – complete if formally voted on by an ICTV Study Group": self.populate_group_vote,
+            "Executive Committee Meeting Decision code": self.get_meeting_decision,
+            "Comments from the Executive Committee": self.get_comments,
+            "Response of proposer": self.get_response,
             "Revision date": self.get_rev_date,
             "Abstract": self.get_abstract
         }
@@ -37,9 +38,11 @@ class Strip:
         self.attribs["Title"] = title_text
 
     def populate_id(self, row, cell_idx, *_):
+        '''Get ID code'''
         self.attribs["Id_code"] = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs]
 
     def populate_authors(self, row, cell_idx, row_idx, table):
+        '''Parse author fields incl address and email'''
         authors = []
         counter = 2
         while True:
@@ -58,9 +61,11 @@ class Strip:
         self.attribs["Authors"] = authors
 
     def get_main_author(self, row, cell_idx, row_idx, table):
+        '''Get primary author'''
         self.attribs["Corr_author"] = [i.text for i in table.rows[row_idx + 1].cells]
 
     def get_subcommittee(self, row, cell_idx, row_idx, table):
+        '''Get subcommittee'''
         counter = 0
         subcommittees = []
         while True:
@@ -82,85 +87,97 @@ class Strip:
         self.attribs["Subcommittees"] = subcommittees
 
     def get_study_groups(self, row, cell_idx, row_idx, table):
+        '''Get study group/s'''
         self.attribs["Study_groups"] = [i.text for i in table.rows[row_idx + 1].cells]
 
     def get_subm_date(self, row, cell_idx, *_):
+        '''Get submission date'''
         [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs]
 
     def populate_group_vote(self, row, cell_idx, row_idx, table):
-        group_vote_responses = []
-        counter = 3 # first blank row
-        while True:
-            try:
-                row_text = [i.text for i in table.rows[row_idx + counter].cells]
-            except IndexError:
-                '''End of table'''
-                break
-            counter += 1
-            if not row_text == ["", "", "", ""]:
-                for cell in row_text:
-                    if cell == "":
-                        cell = 0
-                group_vote_responses.append({"group": row_text[0], "support": row_text[1], "against": row_text[2], "no vote": row_text[3]})
-        self.attribs["Study_group_votes"] = group_vote_responses
+        '''Optional: get group vote numbers'''
+        if self.do_optional:
+            group_vote_responses = []
+            counter = 3 # first blank row
+            while True:
+                try:
+                    row_text = [i.text for i in table.rows[row_idx + counter].cells]
+                except IndexError:
+                    '''End of table'''
+                    break
+                counter += 1
+                if not row_text == ["", "", "", ""]:
+                    for cell in row_text:
+                        if cell == "":
+                            cell = 0
+                    group_vote_responses.append({"group": row_text[0], "support": row_text[1], "against": row_text[2], "no vote": row_text[3]})
+            self.attribs["Study_group_votes"] = group_vote_responses
 
     def get_meeting_decision(self, row, cell_idx, row_idx, table):
-        decision = []
-        counter = 1
-        while True:
-            try:
-                row_text = [i.text for i in table.rows[row_idx + counter].cells]
-            except IndexError:
-                '''End of table'''
-                break
-            counter += 1
-            if row_text[1] != "":
-                decision.append(row_text[0])
-        self.attribs["Ex_committee_decision"] = decision
+        '''Optional: get decision of subcommittee meeting'''
+        if self.do_optional:
+            decision = []
+            counter = 1
+            while True:
+                try:
+                    row_text = [i.text for i in table.rows[row_idx + counter].cells]
+                except IndexError:
+                    '''End of table'''
+                    break
+                counter += 1
+                if row_text[1] != "":
+                    decision.append(row_text[0])
+            self.attribs["Ex_committee_decision"] = decision
 
     def get_comments(self, row, cell_idx, row_idx, table):
-        comments = []
-        counter = 1
-        while True:
-            try:
-                row_text = [i.text for i in table.rows[row_idx + counter].cells]
-            except IndexError:
-                '''End of table'''
-                break
-            counter += 1
+        '''Optional: get author comments'''
+        if self.do_optional:
+            comments = []
+            counter = 1
+            while True:
+                try:
+                    row_text = [i.text for i in table.rows[row_idx + counter].cells]
+                except IndexError:
+                    '''End of table'''
+                    break
+                counter += 1
 
-            for para in table.rows[row_idx + 1].cells[0].paragraphs:
-                for i in para.runs:
-                    text = i.text 
-                    its = i.font.italic
-                    if its:
-                        text = f"<i>{text}<\i>"
-                    comments.append(text)
-        self.attribs["Ex_committee_comments"] = comments
+                for para in table.rows[row_idx + 1].cells[0].paragraphs:
+                    for i in para.runs:
+                        text = i.text 
+                        its = i.font.italic
+                        if its:
+                            text = f"<i>{text}<\i>"
+                        comments.append(text)
+            self.attribs["Ex_committee_comments"] = comments
 
     def get_response(self, row, cell_idx, row_idx, table):
-        response = []
-        counter = 1
-        while True:
-            try:
-                row_text = [i.text for i in table.rows[row_idx + counter].cells]
-            except IndexError:
-                '''End of table'''
-                break
-            counter += 1
-            for para in table.rows[row_idx + 1].cells[0].paragraphs:
-                for i in para.runs:
-                    text = i.text 
-                    its = i.font.italic
-                    if its:
-                        text = f"<i>{text}<\i>"
-                    response.append(text)
-        self.attribs["Proposer_response"] = response
+        '''Optional: get subcommittee comments'''
+        if self.do_optional:
+            response = []
+            counter = 1
+            while True:
+                try:
+                    row_text = [i.text for i in table.rows[row_idx + counter].cells]
+                except IndexError:
+                    '''End of table'''
+                    break
+                counter += 1
+                for para in table.rows[row_idx + 1].cells[0].paragraphs:
+                    for i in para.runs:
+                        text = i.text 
+                        its = i.font.italic
+                        if its:
+                            text = f"<i>{text}<\i>"
+                        response.append(text)
+            self.attribs["Proposer_response"] = response
 
     def get_rev_date(self, row, cell_idx, row_idx, table):
+        '''Get revision date'''
         self.attribs["Revision_date"] = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs]
 
     def get_abstract(self, row, cell_idx, row_idx, table):
+        '''Parse abstract from either S2 or S3'''
         abstract = []
         if [i.text for i in table.rows[row_idx +1].cells] == ['Brief description of current situation:       \n\n\nProposed changes:     \n\n\nJustification:      \n\n']:
             # TODO I've guessed what a blank box looks like: needs to be tested + made more robust
@@ -173,6 +190,7 @@ class Strip:
                     text = f"<i>{text}<\i>"
                 abstract.append(text)
 
+        '''Make flag to indicate whether sec 2 or 3 was filled in'''
         if self.which_section == 2:
             self.attribs["Tp_type"] = ["Non-taxonomic proposal"]
 
@@ -182,6 +200,7 @@ class Strip:
         self.attribs["Tp_abstract"] = abstract        
 
     def make_summary(self):
+        '''Dump results to docx file'''
         doc = Document()
         for title, content in self.attribs.items():
             p = doc.add_paragraph()
@@ -205,7 +224,13 @@ class Strip:
 
         doc.save(f"{self.out_dir}{self.attribs['Id_code'][0]}.docx")
 
+    def save_json(self):
+        '''Dump results to machine-readable format'''
+        with open(f"{self.out_dir}{self.attribs['Id_code'][0]}.json", "w") as outfile: 
+            json.dump(self.attribs, outfile)                
+
     def main(self):
+        '''Iterate over each table element, call parser functions, save.'''
         document = Document(f"{self.in_dir}{self.fname}")
         for table in document.tables:
             for row_idx, row in enumerate(table.rows):
@@ -217,17 +242,15 @@ class Strip:
                         if para_header == "Abstract":
                             '''Increment index for measuring which section's abstract is being parsed'''
                             self.which_section = 3
-
-        with open(f"{self.out_dir}{self.attribs['Id_code'][0]}.json", "w") as outfile: 
-            json.dump(self.attribs, outfile)                
-
+        self.save_json()
         self.make_summary()
 
 if __name__=="__main__":
     in_dir = "data/"
     out_dir = "output/"
+    do_optional = False
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
     for file in os.listdir(in_dir):
-        strip = Strip(file, in_dir, out_dir) 
+        strip = Strip(file, in_dir, out_dir, do_optional) 
         strip.main()
