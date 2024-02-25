@@ -22,25 +22,25 @@ class Strip:
             "Title", "Id_code", "Authors", "Corr_author", "Subcommittees", "Study_groups", "Submission_date", "Tp_abstract", "Tp_type", "Revision_date"
         ]
         self.section_fns = {
-            "Title": self.populate_title,
+            "Title:": self.populate_title,
             "Code assigned:": self.populate_id,
-            "Author(s), affiliation and email address(es) –": self.populate_authors,
-            "Corresponding author(s)": self.get_main_author,
-            "Sub-committee": self.get_subcommittee,
-            "List the ICTV Study Group(s) that have seen or who have involved in creating this proposal.": self.get_study_groups,
+            "Author(s), affiliation and email address(es):": self.populate_authors,
+            # "Corresponding author(s)": self.get_main_author,
+            "ICTV Subcommittee:": self.get_subcommittee,
+            "List the ICTV Study Group(s) that have seen or have been involved in creating this proposal:": self.get_study_groups,
+            "Optional – complete only if formally voted on by an ICTV Study Group:": self.populate_group_vote,
             "Submission date": self.get_subm_date,
-            "Optional – complete if formally voted on by an ICTV Study Group": self.populate_group_vote,
-            "Executive Committee Meeting Decision code": self.get_meeting_decision,
-            "Comments from the Executive Committee": self.get_comments,
-            "Response of proposer": self.get_response,
-            "Revision date": self.get_rev_date,
-            "Abstract": self.get_abstract,
-            "Text of General Proposal": self.get_general_proposal,
-            "References": self.get_references,
+            "Executive Committee Meeting Decision code:": self.get_meeting_decision,
+            "Comments from the Executive Committee:": self.get_comments,
+            "Response of proposer:": self.get_response,
+            "Revision date:": self.get_rev_date,
+            # "Abstract": self.get_abstract,
+            "Text of General Proposal:": self.get_general_proposal,
+            "References:": self.get_references,
             "Text of Taxonomy proposal": self.get_taxonomy_proposal,
-            "Name of accompanying Excel module": self.get_excel_name,
-            "Taxonomic changes proposed": self.get_proposed_changes,
-            "Is any taxon name used here derived from that of a living person (Y/N)": self.get_vanity_names
+            "Name of accompanying Excel module:": self.get_excel_name,
+            "Taxonomic changes proposed:": self.get_proposed_changes,
+            "Is any taxon name used here derived from that of a living person:": self.get_vanity_names
         }
 
     def populate_title(self, row, cell_idx, *_) -> None:
@@ -50,7 +50,7 @@ class Strip:
             title_it_mask = [i.font.italic for i in row.cells[cell_idx+1].paragraphs[0].runs]
             it_indices = np.argwhere(np.array(title_it_mask) != None)
             for i in it_indices:
-                title_text[i[0]] = f"<i>{title_text[i[0]]}<\i>"
+                title_text[i[0]] = f"<i>{title_text[i[0]]}</i>"
             assert title_text != []
             self.attribs["Title"] = title_text
         except:
@@ -207,7 +207,7 @@ class Strip:
                         text = i.text 
                         its = i.font.italic
                         if its:
-                            text = f"<i>{text}<\i>"
+                            text = f"<i>{text}</i>"
                         comments.append(text)
             self.attribs["Ex_committee_comments"] = comments
 
@@ -228,7 +228,7 @@ class Strip:
                         text = i.text 
                         its = i.font.italic
                         if its:
-                            text = f"<i>{text}<\i>"
+                            text = f"<i>{text}</i>"
                         response.append(text)
             self.attribs["Proposer_response"] = response
 
@@ -253,7 +253,7 @@ class Strip:
                     text = i.text 
                     its = i.font.italic
                     if its:
-                        text = f"<i>{text}<\i>"
+                        text = f"<i>{text}</i>"
                     abstract.append(text)
 
             '''Make flag to indicate whether sec 2 or 3 was filled in'''
@@ -306,7 +306,7 @@ class Strip:
             run_header.bold = True
             for cont_block in content:
                 if "<i>" in cont_block:
-                    run = p.add_run(cont_block.replace("<i>", "").replace("<\i>",""))
+                    run = p.add_run(cont_block.replace("<i>", "").replace("</i>",""))
                     run.italic = True
                 else:
                     run = p.add_run(cont_block)
@@ -331,7 +331,7 @@ class Strip:
                         text = i.text 
                         its = i.font.italic
                         if its:
-                            text = f"<i>{text}<\i>"
+                            text = f"<i>{text}</i>"
                         proposal.append(text)
 
                 '''Make flag to indicate whether sec 2 or 3 was filled in'''
@@ -351,7 +351,7 @@ class Strip:
                         text = i.text 
                         its = i.font.italic
                         if its:
-                            text = f"<i>{text}<\i>"
+                            text = f"<i>{text}</i>"
                         refs.append(text)
 
                 '''Make flag to indicate whether sec 2 or 3 was filled in'''
@@ -371,7 +371,7 @@ class Strip:
                         text = i.text 
                         its = i.font.italic
                         if its:
-                            text = f"<i>{text}<\i>"
+                            text = f"<i>{text}</i>"
                         tp_text.append(text)
 
                 '''Make flag to indicate whether sec 2 or 3 was filled in'''
@@ -432,6 +432,7 @@ class Strip:
                         if para_header == "Abstract":
                             '''Increment index for measuring which section's abstract is being parsed'''
                             self.which_section = 3
+        breakpoint()
         err_fname = self.collate_errors()
         self.save_json()
         self.make_summary()
