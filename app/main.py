@@ -5,6 +5,7 @@ import pickle
 import random as r
 import json
 import os
+import re
 
 from app.error_handler import compile_error_logs
 
@@ -22,9 +23,9 @@ class Strip:
             "Title", "Id_code", "Authors", "Corr_author", "Subcommittees", "Study_groups", "Submission_date", "Tp_abstract", "Tp_type", "Revision_date"
         ]
         self.section_fns = {
-            "Title": self.populate_title,
-            "Code assigned:": self.populate_id,
-            "Author(s), affiliation and email address(es) –": self.populate_authors,
+            "Code assigned:": self.populate_id, # Title also lives here in latest form ver
+            "Name": self.populate_authors,
+            #"Author(s), affiliation and email address(es) –": self.populate_authors,
             "Corresponding author(s)": self.get_main_author,
             "Sub-committee": self.get_subcommittee,
             "List the ICTV Study Group(s) that have seen or who have involved in creating this proposal.": self.get_study_groups,
@@ -43,33 +44,46 @@ class Strip:
             "Is any taxon name used here derived from that of a living person (Y/N)": self.get_vanity_names
         }
 
-    def populate_title(self, row, cell_idx, *_) -> None:
-        '''Populate title'''
-        try:
-            title_text = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.text.strip().replace(" ","") == ""]
-            title_it_mask = [i.font.italic for i in row.cells[cell_idx+1].paragraphs[0].runs]
-            it_indices = np.argwhere(np.array(title_it_mask) != None)
-            for i in it_indices:
-                title_text[i[0]] = f"<i>{title_text[i[0]]}<\i>"
-            assert title_text != []
-            self.attribs["Title"] = title_text
-        except:
-            self.attribs["Title"] = self.parser_errors["Title"] = self.parser_err_codes[0]
-
-    def populate_id(self, row, cell_idx, *_):
+    def populate_id(self, row, cell_idx, row_idx, table):
         '''Get ID code'''
+        title_and_code = []
+        counter = 0
+        while True:
+            try:
+                row_text = [i.text.replace("\n","").strip() for i in table.rows[row_idx + counter].cells]
+            except IndexError:
+                '''End of table'''
+                break
+            counter += 1
+            if row_text == ["", "", ""]:  
+                '''Blank line'''
+                continue
+            '''Author details'''
+            for idx, obj in enumerate(row_text):
+                row_text[idx] = re.sub(r'\<[\s\S]*\>', "", obj)
+                row_text[idx] = re.sub(r'\[[\s\S]*\]', "", obj)
+            title_and_code.append(row_text)
+
         try:
-            code = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.text.strip().replace(" ","") == ""]
-            assert code != []
+            code = title_and_code[0][1]
+            assert code != ""
             self.attribs["Id_code"] = code
         except:
             self.attribs["Id_code"] = [f"Not_defined{dt.datetime.now().strftime('%Y%M%d%H%m%s')}"]
             self.parser_errors["Id_code"] = self.parser_err_codes[1]
 
+        try:
+            title = title_and_code[1][1].replace("Title:", "").strip()
+            assert title != ""
+            self.attribs["Title"] = title
+        except:
+            self.attribs["Title"] = self.parser_errors["Title"] = self.parser_err_codes[1]
+
     def populate_authors(self, _row, _cell_idx, row_idx, table) -> None:
         '''Parse author fields incl address and email'''
         authors = []
         counter = 2
+        breakpoint()
         while True:
             try:
                 row_text = [i.text for i in table.rows[row_idx + counter].cells]
@@ -91,7 +105,6 @@ class Strip:
                         if not row_text in self.parser_errors["author"]:
                             self.parser_errors["author"].append(row_text) 
                 authors.append(row_text)
-
         try:
             assert authors != []
             self.attribs["Authors"] = authors

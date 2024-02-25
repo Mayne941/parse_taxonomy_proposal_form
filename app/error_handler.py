@@ -3,7 +3,7 @@ import pickle
 import datetime as dt
 import os
 
-def compile_error_logs(logs):
+def compile_error_logs(logs) -> str:
     '''Retrieve all error logs from run, compile report'''
     all_errors = []
     ts = dt.datetime.now().strftime('%Y%M%d%H%m%s')
