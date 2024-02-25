@@ -24,9 +24,11 @@ class Parse:
                 for wtc in table.findChildren('w:tc'):
                     cell_text = ''
                     for wr in wtc.findChildren('w:r'):
-                        
+                        # if "gWi48L2F1dGhvcj48YXV0aG9yPkxpd" in str(wr): breakpoint()
                         if "<w:i/>" in str(wr) and not wr.text == " ":
                             cell_text += f"<i>{wr.text}</i>"
+                        elif "w:fldChar" in str(wr): 
+                            cell_text = "<Table data voided by parser>"
                         else:
                             cell_text += wr.text
                             
@@ -41,12 +43,6 @@ class Parse:
         self.attribs["code"] = datum[[i for i, x in enumerate(datum) if "Code assigned:" in x][0] + 1]
         self.attribs["title"] = datum[[i for i, x in enumerate(datum) if "Short title:" in x][0]].replace("Short title: ", "")
         self.attribs["study_grp"] = self.raw_data[4][0]
-        self.attribs["submission_date"] = self.raw_data[6][1]
-        try:
-            self.attribs["revision_date"] = self.raw_data[6][3]
-        except:
-            self.attribs["revision_date"] = ""
-        self.attribs["excel_fname"] = self.raw_data[8][0]
 
     def get_authors(self):
         authors = self.raw_data[1]
@@ -57,17 +53,62 @@ class Parse:
         self.attribs["authors"]["addresses"] = [f"{i}" for i in addresses[0].replace("]",")").replace("[","").replace(")",")@~").split("@~") if not i == ""]
         self.attribs["authors"]["corr_author"] = self.raw_data[3][0]
 
-    def get_content(self):
-        self.attribs["sg_comments"] = self.raw_data[5][0]
-        self.attribs["ec_comments"] = self.raw_data[7][0] if not self.raw_data[7][0] == "Is any taxon name used here derived from that of a living person (Y/N)" else ""
+    def get_content_sub13(self):
+        self.attribs["submission_date"] = self.raw_data[6][1]
+        try:
+            self.attribs["revision_date"] = self.raw_data[6][3]
+        except:
+            self.attribs["revision_date"] = ""
+        self.attribs["excel_fname"] = self.raw_data[8][0]
+        # self.attribs["sg_comments"] = self.raw_data[5][0]
+        # self.attribs["ec_comments"] = self.raw_data[7][0] 
         self.attribs["abstract"] = self.raw_data[9][0]
-        self.attribs["proposal_text"] = self.raw_data[10][0]
+        self.attribs["proposal_text"] = " ".join(self.raw_data[10])
+
+    def get_content_15(self):
+        self.attribs["submission_date"] = self.raw_data[9][1]
+        try:
+            self.attribs["revision_date"] = self.raw_data[9][3]
+        except:
+            self.attribs["revision_date"] = ""
+        self.attribs["excel_fname"] = self.raw_data[10][0]
+        self.attribs["abstract"] = self.raw_data[11][0]
+        self.attribs["proposal_text"] = " ".join(self.raw_data[12])
+
+    def get_content_13(self):
+        self.attribs["submission_date"] = self.raw_data[8][1]
+        try:
+            self.attribs["revision_date"] = self.raw_data[8][3]
+        except:
+            self.attribs["revision_date"] = ""
+        self.attribs["excel_fname"] = self.raw_data[10][0]
+        self.attribs["abstract"] = self.raw_data[11][0]
+        self.attribs["proposal_text"] = " ".join(self.raw_data[12])
+
+    def get_content_14(self):
+        self.attribs["submission_date"] = self.raw_data[9][1]
+        try:
+            self.attribs["revision_date"] = self.raw_data[9][3]
+        except:
+            self.attribs["revision_date"] = ""
+        self.attribs["excel_fname"] = self.raw_data[11][0]
+        self.attribs["abstract"] = self.raw_data[12][0]
+        self.attribs["proposal_text"] = " ".join(self.raw_data[13])
 
     def main(self):
         self.scrape()
         self.get_metadata()
         self.get_authors()
-        self.get_content()
+
+        if len(self.raw_data) < 13:
+            '''Short form format'''
+            self.get_content_sub13()
+        elif len(self.raw_data) == 13:
+            self.get_content_13()
+        elif len(self.raw_data) == 14:
+            self.get_content_14()
+        else:
+            self.get_content_15()
 
         return self.attribs["code"], self.attribs, "" # TODO errors
 
