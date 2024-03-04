@@ -48,9 +48,9 @@ class Parse:
         authors = self.raw_data[1]
         addresses = self.raw_data[2]
         self.attribs["authors"] = {}
-        self.attribs["authors"]["names"] = [i.strip().replace(".", "") for i in authors[0].replace(";", ",").split(",")]
-        self.attribs["authors"]["emails"] = [i.strip() for i in authors[1].replace(";", ",").split(",")]
-        self.attribs["authors"]["addresses"] = [f"{i}" for i in addresses[0].replace("]",")").replace("[","").replace(")",")@~").split("@~") if not i == ""]
+        self.attribs["authors"]["names"] = [i.strip().replace(".", "") for i in authors[0].replace(";", ",").split(",") if not i.strip().replace(" ", "") == ""]
+        self.attribs["authors"]["emails"] = [i.strip() for i in authors[1].replace(";", ",").split(",") if not i.strip().replace(" ", "") == ""]
+        self.attribs["authors"]["addresses"] = [f"{i}" for i in addresses[0].replace("]",")").replace("[","").replace(")",")@~").split("@~") if not i.strip().replace(" ", "") == ""]
         self.attribs["authors"]["corr_author"] = self.raw_data[3][0]
 
     def get_content_sub13(self):
@@ -115,8 +115,7 @@ class Parse:
 def save_json(data) -> None:
     '''Dump results to machine-readable format'''
     with open(f"test.json", "w") as outfile: 
-        json.dump(data, outfile)                
-
+        json.dump(data, outfile)                    
 
 if __name__ == "__main__":
     in_dir = "data/"
