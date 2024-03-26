@@ -79,15 +79,12 @@ def main():
         #print("Function", HTML_text)
         return(HTML_text)
 
-    if os.path.exists('output.csv'):
-        os.remove('output.csv')
-
-    fileList = os.listdir(ExcelPath)
+    fileList = [i for i in os.listdir(ExcelPath) if not "_Suppl" in i] # Supplements get downloaded with taxo forms
     if os.path.isfile(f"{CsvPath}output.csv"): os.remove(f"{CsvPath}output.csv")
 
     # Identify which Excel spreadsheet format is being used - assume all of same type
-    # New_Excel_format = input("2024 format (Y/N)? (So know which sheet to input)").lower()
-    New_Excel_format = "n"  #TODO RM HARD CODED FOR TEST
+    New_Excel_format = input("2024 format (Y/N)? (So know which sheet to input)").lower()
+    # New_Excel_format = "n"  #TODO RM HARD CODED FOR TEST
 
     for file in fileList:
         if New_Excel_format == "n":
@@ -96,8 +93,7 @@ def main():
             sheet = 1
         xls = pd.ExcelFile(f"{ExcelPath}{file}")
         df = pd.read_excel(xls, sheet_name=sheet)
-        df.to_csv(f"{CsvPath}output.csv", mode="a", encoding="utf-8")
-        
+        df.to_csv(f"{CsvPath}output.csv", mode="a", encoding="utf-8")       
 
     with open (f"{CsvPath}output.csv", encoding="utf-8") as csvfile:
         readcsv = csv.reader(csvfile, delimiter=',')
@@ -107,10 +103,12 @@ def main():
                     continue
             except: breakpoint()
 
+        
     # Identify start of TP sheet by presence of "Code:" and extract TP code from filename
             if re.search("Code", row[2]) or re.search("INSTRUCTIONS:", row[1]) or re.search("Code assigned", row[1]):
                 Excel_counter = Excel_counter + 1
                 code = fileList[Excel_counter]
+                print(f"Processing file {Excel_counter}: {code}")
                 #code = row[5]
                 code=code[:9]
                 ignore_row = "N"
@@ -150,7 +148,6 @@ def main():
                 Demote_taxon_table_text = Demote_taxon_table_text + "<table style=\"width:100%\" border=\"1\" id=\"" + code + "\"><tbody" + Demote_taxon_table_starter_text
                 Promote_taxon_table_text = Promote_taxon_table_text + "<table style=\"width:100%\" border=\"1\" id=\"" + code + "\"><tbody" + Promote_taxon_table_starter_text
 
-                print("Code is: ", code)
                 continue
 
     # Identify heading rows - ignore these rows
@@ -213,6 +210,7 @@ def main():
                     Create_new_marker = "Y"
                     changed_rank = row[proposed_species_column + 9]
                     for count, rank in enumerate (ranklist):
+                        # if "Efunavirus" in row: breakpoint()
                         if changed_rank == rank:
                             new_taxon_name = row[proposed_species_column - count]
                             if changed_rank == "species":
@@ -222,7 +220,7 @@ def main():
                                 exemplar = ""
                                 genbank = ""
                             New_taxon_table_text = New_taxon_table_text + "<tr><td>New taxon</td><td>" + changed_rank + "</td><td><em>" + new_taxon_name + "</em></td><td>" + exemplar + "</td><td>" + genbank + "</td></tr>"
-                        break
+                            break
 
     # Rename option
                 elif row[proposed_species_column + 8] == "Rename":
@@ -262,9 +260,9 @@ def main():
                                     else:
                                         old_parent_taxon_name = row[current_species_column - 14 + x -1]
                                         new_parent_taxon_name = row[proposed_species_column - 14 + x]
-                                    changed_parent_taxon_rank = ranklist[x]
-                                MoveRename_taxon_table_text = MoveRename_taxon_table_text + "<tr><td>Move; rename taxon</td><td>" + changed_rank + "</td><td><em>" + old_taxon_name + "</em></td><td><em>" + old_parent_taxon_name + "</em></td><td><em>" + new_taxon_name + "</em></td><td><em>" + new_parent_taxon_name + "</em></td></tr>"
-                                break
+                                    changed_parent_taxon_rank = ranklist[x] # RM < TODO 264-5 INDENTED 1
+                                    MoveRename_taxon_table_text = MoveRename_taxon_table_text + "<tr><td>Move; rename taxon</td><td>" + changed_rank + "</td><td><em>" + old_taxon_name + "</em></td><td><em>" + old_parent_taxon_name + "</em></td><td><em>" + new_taxon_name + "</em></td><td><em>" + new_parent_taxon_name + "</em></td></tr>"
+                                    break
                             break
 
     # Move option
@@ -364,7 +362,7 @@ def main():
                                 expect_paired_lines = "N"
                                 old_taxon_name_1 = ""
                                 break
-
+            # if "Efunavirus" in row: breakpoint() ##############
 
         #Adds on last table
         HTML_text = (zero_files(HTML_text, Create_new_marker, Renamed_marker, Abolish_marker, Move_marker, MoveRename_marker,
@@ -375,16 +373,34 @@ def main():
         HTML_text = HTML_text + "</table>"
         HTML_text = HTML_text[8:]
 
-        output = open("combined_tables_html.txt", "w", encoding="'utf-8'")
-        output.write(HTML_text)
+        with open("combined_tables_html.txt", "w", encoding="'utf-8'") as output:
+            output.write(HTML_text)
 
         master_df = pd.DataFrame()
-        df = pd.read_html(HTML_text)
-        for idx, subtable in enumerate(df):
-            subtable["tp"] = fileList[idx].split(".xlsx")[0]
-            master_df = pd.concat([master_df, subtable])
+        tables_split = HTML_text.split("<h2>")
+        del tables_split[0] # kill empty
+        for table_block in tables_split:
+            code = table_block.split("</h2>")[0].split(" ")[-1]
+            tables = table_block.split("<tbody>")
+            del tables[0]
+            for table in tables:
+                table = f"<tbody>{table}"
+                try:
+                    tmp_df = pd.read_html(table)
+                except ValueError: 
+                    tmp_df = pd.read_html(f"<table>{table}")
+                tmp_df[0]["tp"] = code
+                master_df = pd.concat([master_df, tmp_df[0]])
 
-        pickle_fname = "test.p"
+        # breakpoint()
+        # df = pd.read_html(HTML_text)
+        # for idx, subtable in enumerate(df):
+        #     try:
+        #         subtable["tp"] = fileList[idx].split(".xlsx")[0]
+        #     except: breakpoint()
+        #     master_df = pd.concat([master_df, subtable])
+
+        pickle_fname = "animal_+ssrna.p"
         with open(pickle_fname, "wb") as f:
             p.dump(master_df, f)
 
