@@ -7,7 +7,7 @@ import re, csv, os
 import pandas as pd
 import pickle as p
 
-def main():
+def main(out_fname):
     ExcelPath = "./data_tables/"
     CsvPath = f"./parsed_tables/"
     previous_type_change = ""
@@ -399,10 +399,10 @@ def main():
         #         subtable["tp"] = fileList[idx].split(".xlsx")[0]
         #     except: breakpoint()
         #     master_df = pd.concat([master_df, subtable])
-
-        pickle_fname = "animal_+ssrna.p"
-        with open(pickle_fname, "wb") as f:
+        breakpoint()
+        with open(f"{out_fname}.p", "wb") as f:
             p.dump(master_df, f)
 
 if __name__ == "__main__":
-    main()
+    fname = "plant_virus"
+    main(fname)

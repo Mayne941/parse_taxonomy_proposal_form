@@ -10,6 +10,7 @@ class Parse:
         self.attribs = {}
 
     def scrape(self):
+        '''Read word file in, convert to XML then stucture as dict'''
         document = zipfile.ZipFile(self.fpath)
         xml_content = document.read('word/document.xml')
         document.close()
@@ -34,6 +35,12 @@ class Parse:
                     table_contents.append(cell_text.replace("</i><i>",""))
             if not table_contents == [] and not table_contents in raw_contents:
                 raw_contents.append(table_contents)
+
+        for doc in raw_contents:
+            '''Fix excel path'''
+            for item in doc:
+                item = item.replace(".xlxs", ".xlsx")
+
         self.raw_data = raw_contents
 
     def get_metadata(self):
@@ -45,7 +52,8 @@ class Parse:
         self.attribs["study_grp"] = self.raw_data[4][0]
 
     def get_authors(self):
-        authors = self.raw_data[1]
+        '''Scrape author details'''
+        authors = [i for i in self.raw_data[1] if not i == ""]
         addresses = self.raw_data[2]
         if authors == "": breakpoint()
         self.attribs["authors"] = {}
@@ -54,177 +62,75 @@ class Parse:
         self.attribs["authors"]["addresses"] = [f"{i}" for i in addresses[0].replace("]",")").replace("[","").replace(")",")@~").split("@~") if not i.strip().replace(" ", "") == ""]
         self.attribs["authors"]["corr_author"] = self.raw_data[3][0]
 
-    def get_content_sub13(self):
-        self.attribs["submission_date"] = self.raw_data[6][1]
+        # if self.attribs["code"] == "<i>2023.027B</i>": breakpoint()
+
+    def get_content(self, submission_idx, excel_idx):
+        '''Attempt to scrape content from floating boxes.
+        Indices of boxes vary depending on filled, unfilled and deleted boxes.
+        Attempt to center it by finding submission date and excel box with some string matching.
+        '''
         try:
-            self.attribs["revision_date"] = self.raw_data[6][3]
-        except:
-            self.attribs["revision_date"] = ""
-        if ".xl" in self.raw_data[8][0]:
-            excel_box = 8
-        elif ".xl" in self.raw_data[9][0]:
-            excel_box = 9
-        elif ".xl" in self.raw_data[10][0]:
-            excel_box = 10
-        elif ".xl" in self.raw_data[11][0]:
-            excel_box = 11
-        else: breakpoint()
-
-        self.attribs["excel_fname"] = self.raw_data[excel_box][0]
-        self.attribs["abstract"] = self.raw_data[excel_box+1][0]
-        self.attribs["proposal_text"] = " ".join(self.raw_data[excel_box+2])
-
-    def get_content_15(self):
-        if self.raw_data[10][0] == "": # HACKY AF :(
-            self.attribs["submission_date"] = self.raw_data[9][1]
-            try:
-                self.attribs["revision_date"] = self.raw_data[9][3]
-            except:
-                self.attribs["revision_date"] = ""
-            self.attribs["excel_fname"] = self.raw_data[11][0]
-            self.attribs["abstract"] = self.raw_data[12][0]
-            self.attribs["proposal_text"] = " ".join(self.raw_data[13])
-        elif ".xl" in self.raw_data[9][0]:
-            try:
-                self.attribs["submission_date"] = self.raw_data[8][1]
-            except: breakpoint()
-            try:
-                self.attribs["revision_date"] = self.raw_data[8][3]
-            except:
-                self.attribs["revision_date"] = ""
-            self.attribs["excel_fname"] = self.raw_data[9][0]
-            self.attribs["abstract"] = self.raw_data[10][0]
-            self.attribs["proposal_text"] = " ".join(self.raw_data[11])
-
-        else:
-            self.attribs["submission_date"] = self.raw_data[9][1]
-            try:
-                self.attribs["revision_date"] = self.raw_data[9][3]
-            except:
-                self.attribs["revision_date"] = ""
-            self.attribs["excel_fname"] = self.raw_data[10][0]
-            self.attribs["abstract"] = self.raw_data[11][0]
-            self.attribs["proposal_text"] = " ".join(self.raw_data[12])
-
-    def get_content_13(self):
-        self.attribs["submission_date"] = self.raw_data[6][1]
-        try:
-            self.attribs["revision_date"] = self.raw_data[6][3]
-        except:
-            self.attribs["revision_date"] = ""
-        if ".xl" in self.raw_data[8][0]:
-            excel_box = 8
-        elif ".xl" in self.raw_data[9][0]:
-            excel_box = 9
-        elif ".xl" in self.raw_data[10][0]:
-            excel_box = 10
-        elif ".xl" in self.raw_data[11][0]:
-            excel_box = 11
-        else: breakpoint()
-
-        self.attribs["excel_fname"] = self.raw_data[excel_box][0]
-        self.attribs["abstract"] = self.raw_data[excel_box+1][0]
-        self.attribs["proposal_text"] = " ".join(self.raw_data[excel_box+2])
-
-
-    def get_content_14(self):
-        try:
-            self.attribs["submission_date"] = self.raw_data[9][1]
+            self.attribs["submission_date"] = self.raw_data[submission_idx][1]
         except: 
-            self.attribs["submission_date"] = self.raw_data[9][0]
+            submission_idx -= 1
+            try:
+                self.attribs["submission_date"] = self.raw_data[submission_idx][1]
+            except:
+                self.attribs["submission_date"] = self.raw_data[submission_idx]
         try:
-            self.attribs["revision_date"] = self.raw_data[9][3]
+            if self.attribs["submission_date"].lower() == "person from whom the name is derived":
+                submission_idx += 1
+                self.attribs["submission_date"] = self.raw_data[submission_idx][1]
+            elif self.attribs["submission_date"].lower() == "n" or self.attribs["submission_date"].lower() == "y" or ".xlsx" in self.attribs["submission_date"] or self.attribs["submission_date"].lower() == "no":
+                self.attribs["submission_date"] = self.raw_data[submission_idx+2][1]
+                submission_idx += 2
+            elif self.attribs["submission_date"].lower() == "number of members":
+                self.attribs["submission_date"] = self.raw_data[submission_idx+3][1]
+                submission_idx += 3
         except:
-            self.attribs["revision_date"] = ""
+            self.attribs["submission_date"] = "<<COULDN'T PARSE SUBMISSION DATE>>"
 
-        if ".xl" in self.raw_data[8][0]:
-            excel_box = 8
-        elif ".xl" in self.raw_data[9][0]:
-            excel_box = 9
-        elif ".xl" in self.raw_data[10][0]:
-            excel_box = 10
-        elif ".xl" in self.raw_data[11][0]:
-            excel_box = 11
-        else: breakpoint()
+        # if self.attribs["submission_date"] == "Person from whom the name is derived":breakpoint()
 
-        self.attribs["excel_fname"] = self.raw_data[excel_box][0]
-        self.attribs["abstract"] = self.raw_data[excel_box+1][0]
-        self.attribs["proposal_text"] = " ".join(self.raw_data[excel_box+2])
-
-    def how_many_lengths_are_there_guys_seriously(self):
         try:
-            self.attribs["submission_date"] = self.raw_data[9][1]
-        except: 
-            self.attribs["submission_date"] = self.raw_data[9][0]
-        try:
-            self.attribs["revision_date"] = self.raw_data[9][3]
+            self.attribs["revision_date"] = self.raw_data[submission_idx][3]
         except:
-            self.attribs["revision_date"] = ""
-    
-        if ".xl" in self.raw_data[8][0]:
+            self.attribs["revision_date"] = "<<COULDN'T PARSE SUBMISSION DATE>>"
+
+        if ".xl" in self.raw_data[excel_idx][0]:
             excel_box = 8
-        elif ".xl" in self.raw_data[9][0]:
+        elif ".xl" in self.raw_data[excel_idx+1][0]:
             excel_box = 9
-        elif ".xl" in self.raw_data[10][0]:
+        elif ".xl" in self.raw_data[excel_idx+2][0]:
             excel_box = 10
-        elif ".xl" in self.raw_data[11][0]:
+        elif ".xl" in self.raw_data[excel_idx+3][0]:
             excel_box = 11
-        elif ".xl" in self.raw_data[12][0]:
+        elif ".xl" in self.raw_data[excel_idx+4][0]:
             excel_box = 12
         else: breakpoint()
 
         self.attribs["excel_fname"] = self.raw_data[excel_box][0]
-        self.attribs["abstract"] = self.raw_data[excel_box+1][0]
-        self.attribs["proposal_text"] = " ".join(self.raw_data[excel_box+2])
-
-
-    def get_content_16(self):
         try:
-            self.attribs["submission_date"] = self.raw_data[9][1]
-        except: 
-            self.attribs["submission_date"] = self.raw_data[9][0]
-        try:
-            self.attribs["revision_date"] = self.raw_data[9][3]
-        except:
-            self.attribs["revision_date"] = ""
-
-        if ".xl" in self.raw_data[8][0]:
-            excel_box = 8
-        elif ".xl" in self.raw_data[9][0]:
-            excel_box = 9
-        elif ".xl" in self.raw_data[10][0]:
-            excel_box = 10
-        elif ".xl" in self.raw_data[11][0]:
-            excel_box = 11
-        elif ".xl" in self.raw_data[12][0]:
-            excel_box = 12
-        else: breakpoint()
-
-        self.attribs["excel_fname"] = self.raw_data[excel_box][0]
-        self.attribs["abstract"] = self.raw_data[excel_box+1][0]
+            self.attribs["abstract"] = self.raw_data[excel_box+1][0]
+        except: breakpoint()
         self.attribs["proposal_text"] = " ".join(self.raw_data[excel_box+2])
-
 
     def main(self):
         self.scrape()
         self.get_metadata()
         self.get_authors()
 
-        if len(self.raw_data) < 13:
-            '''Short form format'''
-            self.get_content_sub13()
-        elif len(self.raw_data) == 13:
-            self.get_content_13()
+        '''Count length of boxes; guess where submission and excel boxes are, pass to scraper'''
+        if len(self.raw_data) <= 13:
+            self.get_content(6,8)
         elif len(self.raw_data) == 14:
-            self.get_content_14()
+            self.get_content(9,8)
         elif len(self.raw_data) == 15:
-            self.get_content_15()
-        elif len(self.raw_data) == 16:
-            self.get_content_16()
-        else: 
-            self.how_many_lengths_are_there_guys_seriously()
+            self.get_content(10,8)
+        else:
+            self.get_content(9,8)
 
-        # if "2023.072B" in self.attribs["code"]: breakpoint()
+        # if self.attribs["code"] == "2023.005P": breakpoint()
 
         print(f"TEXT PARSED: {self.attribs['code']}")
         return self.attribs["code"], self.attribs, "" # TODO errors
@@ -234,10 +140,9 @@ def save_json(data, fname) -> None:
     with open(f"{fname}.json", "w") as outfile: 
         json.dump(data, outfile)                    
 
-if __name__ == "__main__":
+def main(fname):
     in_dir = "data/"
     out_dir = "output/"
-    do_optional = False
     all_data = {}
     error_logs = []
     if not os.path.exists(out_dir):
@@ -250,5 +155,9 @@ if __name__ == "__main__":
         all_data[code] = data
         error_logs.append(errors)
 
-    save_json(all_data, "animal_+ssrna")
+    save_json(all_data, fname)
+
+if __name__ == "__main__":
+    fname = "plant_virus"
+    main(fname)
 
