@@ -399,7 +399,7 @@ def main(out_fname):
         #         subtable["tp"] = fileList[idx].split(".xlsx")[0]
         #     except: breakpoint()
         #     master_df = pd.concat([master_df, subtable])
-        breakpoint()
+
         with open(f"{out_fname}.p", "wb") as f:
             p.dump(master_df, f)
 
