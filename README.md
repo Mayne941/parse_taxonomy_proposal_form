@@ -13,3 +13,6 @@ Basic Usage
 1. Install Python libraries: ```pip install -r requirements.txt```
 1. Run main script: ```python3 app/main.py```
 1. Check output in "output" folder.
+
+Options
+1. Collect data from all boxes, rather than just mandatory ones, by switching flag in app.main ```do_optional = False``` > ```True```

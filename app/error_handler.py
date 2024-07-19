@@ -33,3 +33,4 @@ def compile_error_logs(logs):
     fname = f"err/errors_{ts}.docx"
     doc.save(fname)
     return fname
+
