@@ -8,8 +8,10 @@ import pandas as pd
 import pickle as p
 
 def main(out_fname):
-    ExcelPath = "./data_tables/"
-    CsvPath = f"./parsed_tables/"
+    ExcelPath = f"./{out_fname}/data_tables/"
+    CsvPath = f"./{out_fname}//parsed_tables/"
+    if not os.path.exists(CsvPath):
+        os.mkdir(CsvPath)
     previous_type_change = ""
     Create_new_marker = "N"
     Renamed_marker = "N"
@@ -83,18 +85,21 @@ def main(out_fname):
     if os.path.isfile(f"{CsvPath}output.csv"): os.remove(f"{CsvPath}output.csv")
 
     # Identify which Excel spreadsheet format is being used - assume all of same type
-    New_Excel_format = input("2024 format (Y/N)? (So know which sheet to input)").lower()
+    # New_Excel_format = input("2024 format (Y/N)? (So know which sheet to input)").lower()
     # New_Excel_format = "n"  #TODO RM HARD CODED FOR TEST
-
+    print("I've assumed we're using the 2024 format!")
+    New_Excel_format = "y"
     for file in fileList:
         if New_Excel_format == "n":
             sheet = 0
         else:
             sheet = 1
         xls = pd.ExcelFile(f"{ExcelPath}{file}")
-        df = pd.read_excel(xls, sheet_name=sheet)
+        try:
+            df = pd.read_excel(xls, sheet_name=sheet)
+        except: 
+            raise SystemError(f"COULDNT OPEN FILE {file}")
         df.to_csv(f"{CsvPath}output.csv", mode="a", encoding="utf-8")       
-
     with open (f"{CsvPath}output.csv", encoding="utf-8") as csvfile:
         readcsv = csv.reader(csvfile, delimiter=',')
         for row in readcsv:
@@ -102,6 +107,7 @@ def main(out_fname):
                 if row[39] == "Please select":
                     continue
             except: breakpoint()
+            
 
         
     # Identify start of TP sheet by presence of "Code:" and extract TP code from filename
@@ -362,7 +368,7 @@ def main(out_fname):
                                 expect_paired_lines = "N"
                                 old_taxon_name_1 = ""
                                 break
-            # if "Efunavirus" in row: breakpoint() ##############
+            # if "015M" in code: breakpoint()
 
         #Adds on last table
         HTML_text = (zero_files(HTML_text, Create_new_marker, Renamed_marker, Abolish_marker, Move_marker, MoveRename_marker,
@@ -392,7 +398,6 @@ def main(out_fname):
                 tmp_df[0]["tp"] = code
                 master_df = pd.concat([master_df, tmp_df[0]])
 
-        # breakpoint()
         # df = pd.read_html(HTML_text)
         # for idx, subtable in enumerate(df):
         #     try:
@@ -404,5 +409,5 @@ def main(out_fname):
             p.dump(master_df, f)
 
 if __name__ == "__main__":
-    fname = "plant_virus"
+    fname = input("fname")
     main(fname)

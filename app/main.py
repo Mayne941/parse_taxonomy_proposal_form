@@ -40,6 +40,7 @@ class Parse:
             '''Fix excel path'''
             for item in doc:
                 item = item.replace(".xlxs", ".xlsx")
+        breakpoint()
 
         self.raw_data = raw_contents
 
@@ -141,8 +142,8 @@ def save_json(data, fname) -> None:
         json.dump(data, outfile)                    
 
 def main(fname):
-    in_dir = "data/"
-    out_dir = "output/"
+    in_dir = f"{fname}/data/"
+    out_dir = f"{fname}/output/"
     all_data = {}
     error_logs = []
     if not os.path.exists(out_dir):
