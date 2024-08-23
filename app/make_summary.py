@@ -111,7 +111,9 @@ def get_authors(dat):
     df = df.drop(columns="auth_decode")
     df = df.drop_duplicates(subset="author", keep="last")
     # df = df.drop_duplicates(subset="email", keep="last")
+    df = df.dropna(subset=["author","email","affil"])
     df = df.fillna("")
+    df = df[df["author"] != ""]
     return final_author_list, df
 
 def build_table(df, doc):
@@ -172,6 +174,29 @@ def get_document_font(doc, type):
 
 def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fname, sc_chair_df) -> None:
     '''Dump results to docx file'''
+    from docx.oxml import OxmlElement, ns
+
+    def create_element(name):
+        return OxmlElement(name)
+
+    def create_attribute(element, name, value):
+        element.set(ns.qn(name), value)
+
+    def add_page_number(run):
+        fldChar1 = create_element('w:fldChar')
+        create_attribute(fldChar1, 'w:fldCharType', 'begin')
+
+        instrText = create_element('w:instrText')
+        create_attribute(instrText, 'xml:space', 'preserve')
+        instrText.text = "PAGE"
+
+        fldChar2 = create_element('w:fldChar')
+        create_attribute(fldChar2, 'w:fldCharType', 'end')
+
+        run._r.append(fldChar1)
+        run._r.append(instrText)
+        run._r.append(fldChar2)
+
     TAB_CNT = 1
     doc = Document()
     p = doc.add_paragraph()
@@ -179,7 +204,7 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
     p.paragraph_format.space_after = 0
     doc, font = get_document_font(doc, "normal")
     '''Make title & authors'''
-    run = p.add_run(f"Summary of taxonomy changes ratified by the International Committee on Taxonomy of Viruses (ICTV) from the {fname.replace('.xlsx','').replace('_','')} sucommittee, 2024")
+    run = p.add_run(f"Summary of taxonomy changes ratified by the International Committee on Taxonomy of Viruses (ICTV) from the {fname.replace('.xlsx','').replace('_',' ')} Subcommittee, 2024")
     run.bold = True
     run = p.add_run("\n\n")
     '''Write author list'''
@@ -225,7 +250,6 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
             worksheet.set_column(idx, idx, max_len, cell_format)  # set column width
     writer.save()
 
-
     cnt, affil_lst, seen_affils = 0, [], []
     for row in taxon_df.values.tolist():
         if row[2] == "??":
@@ -241,9 +265,8 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
         else:
             '''If address seen before'''
             affil_lst.append(seen_affils.index(row[2]))
-            seen_affils.append(row[2])
-    taxon_df["affil_idx"] = affil_lst
 
+    taxon_df["affil_idx"] = affil_lst
     auth_acronym_pat = re.compile(r'([A-Z]{2,3}[\,\)])')
     for i in taxon_df.values.tolist():
         run = p.add_run(f"{i[0]}")
@@ -251,14 +274,18 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
             run = p.add_run(f"{i[5]+1}")
         except: breakpoint()
         run.font.superscript = True
-        if not i[3] == taxon_df.shape[0]:
+        if not i[4] == taxon_df.shape[0]: # commas inbetween except for end
             run = p.add_run(", ")
     p.add_run("\n\n")
+    seen_affils = []
     for i in taxon_df.values.tolist():
-        run = p.add_run(f"{i[5]+1}")
-        run.font.superscript = True
-        run = p.add_run(f"{re.sub(auth_acronym_pat, '',i[2]).replace('(','').strip() if not i[2] == '??' else 'Unknown address'}; ")
-        run.font.italic = True
+        if not i[2] in seen_affils:
+            run = p.add_run(f"{i[5]+1}")
+            run.font.superscript = True
+            run = p.add_run(f"{re.sub(auth_acronym_pat, '',i[2]).replace('(','').strip() if not i == '??' else 'Unknown address'}; ")
+            run.font.italic = True
+            seen_affils.append(i[2])
+
     font = get_document_font(doc, "normal")
     p.add_run("\n")
 
@@ -298,12 +325,10 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                 run = p.add_run(word)
                 run.italic = False          
             run = p.add_run(" ")  
-        if key == "introduction":
-            p.add_run("\n\n\n\n\n\n")       
         p.add_run("\n")
     p.add_run("\n\n\n\n\n\n")
     
-    docs_sorted_idxs = np.argsort([i["code"].split(".")[-1].split("_")[0] for i in docs])
+    docs_sorted_idxs = np.argsort([i["code"].split(".")[1] for i in docs])
     docs_sorted = [docs[i] for i in docs_sorted_idxs]
     # for document in alive_it(docs):
     for document in docs_sorted:
@@ -437,8 +462,10 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
         run.italic = True
     p.add_run("\n")
 
-    p.add_run("References:\n FILL ME IN PLEASE SC CHAIR") # TODO
+    p.add_run("\nReferences:\n FILL ME IN PLEASE SC CHAIR") # TODO
     run.bold = True
+
+    add_page_number(doc.sections[0].footer.paragraphs[0].add_run())
 
     doc.save(f"{fname.split('.')[0]}/{fname.split('.')[0]}.docx")
 
@@ -558,7 +585,7 @@ def get_tabular(fname):
 
 def get_sc_chair(fname):
     df = pd.read_csv("sc_chairs.csv")
-    df2 = df[df["Subcommittee"].str.lower().str.contains(fname.replace("_"," ").replace(".json","").replace(" viruses", "").replace("2024 ",""))]
+    df2 = df[df["Subcommittee"].str.lower().str.contains(fname.lower().replace("_"," ").replace(".json","").replace("2024 ",""))]
     if df2.empty: breakpoint()
     assert not df2.empty, "couldn't match sc chair"
     return df2
@@ -566,14 +593,17 @@ def get_sc_chair(fname):
 def main(fname):
     with open(f"{fname}.json", "r") as f:
         dat = json.loads(f.read())
+    from collections import OrderedDict as od
+    dat = od(sorted(dat.items()))
+
     sc_chair_df = get_sc_chair(fname)
     auths, author_tbl = get_authors(dat)
     taxon_tbl, master_species_lst = get_tabular(f"{fname}.p")
     docs = get_docs(dat, auths)
     master_out = {
-        "corresponding_auth": f"<b>CORRESPONDING AUTHOR</b>: {sc_chair_df['Email'].item()}",
-        "abstract": "<b>ABSTRACT: FILL ME IN PLEASE SC CHAIR",
-        "introduction": "<b>INTRODUCTION: FILL ME IN PLEASE SC CHAIR",
+        "corresponding_auth": f"\n<b>CORRESPONDING AUTHOR</b>: {sc_chair_df['Email'].item()}",
+        "abstract": f"<b>ABSTRACT: FILL ME IN PLEASE SC CHAIR\n\n\n",
+        "introduction": "<b>INTRODUCTION: FILL ME IN PLEASE SC CHAIR\n\n\n\n\n\n",
         "main_text_banner": "<b>Main Text</b>",
     }
     

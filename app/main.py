@@ -16,27 +16,6 @@ class Parse:
         document.close()
         soup = BeautifulSoup(xml_content, 'xml')
 
-<<<<<<< HEAD
-        more_content = soup.find_all('p')
-        raw_contents = []
-        for tag in more_content:
-            table = tag.find_next_sibling('w:tbl')
-            table_contents = []
-            if table:
-                for wtc in table.findChildren('w:tc'):
-                    cell_text = ''
-                    for wr in wtc.findChildren('w:r'):
-                        if "<w:i/>" in str(wr) and not wr.text == " ":
-                            cell_text += f"<i>{wr.text}</i>"
-                        elif "w:fldChar" in str(wr): 
-                            cell_text = "<Table data voided by parser>"
-                        else:
-                            cell_text += wr.text
-                            
-                    table_contents.append(cell_text.replace("</i><i>",""))
-            if not table_contents == [] and not table_contents in raw_contents:
-                raw_contents.append(table_contents)
-=======
 class Strip:
     def __init__(self, fname, in_dir, out_dir, do_optional) -> None:
         self.fname = fname
@@ -70,7 +49,6 @@ class Strip:
             "Taxonomic changes proposed": self.get_proposed_changes,
             "Is any taxon name used here derived from that of a living person (Y/N)": self.get_vanity_names
         }
->>>>>>> main
 
         for doc in raw_contents:
             '''Fix excel path'''
