@@ -3,16 +3,17 @@ Python script to extract data from the ICTV taxonomy proposal form. Capable of b
 
 Outputs data to a machine-readable/database-compatible JSON document and a summary word document.
 
-Pre-requisites
+N.b. this code is in an alpha state. Expect bugs, breakpoints etc. Testing, documentation etc. will follow.
+
+# Pre-requisites
 1. Python 3.7 + 
+1. ICTV taxonomy proposals: paired .docx and .xlsx documents, see https://ictv.global/files/proposals/pending 
 
-Basic Usage
+Code expects you to have n folders in the base directory, containing two folders: data (paste .docx files here) and data_tables (paste .xlsx files here). Folder names are input in ```app.entrypoint```.  
+
+# Usage
 1. Pull repository.
-1. Make a new folder in the repository called "data".
-1. Place taxonomy proposal documents in data folder.
+1. Ensure pre-requisites in place (above).
 1. Install Python libraries: ```pip install -r requirements.txt```
-1. Run main script: ```python3 app/main.py```
-1. Check output in "output" folder.
+1. Run main script: ```python3 -m app.entrypoint```
 
-Options
-1. Collect data from all boxes, rather than just mandatory ones, by switching flag in app.main ```do_optional = False``` > ```True```
