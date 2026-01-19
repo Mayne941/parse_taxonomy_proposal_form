@@ -1,13 +1,16 @@
+import json, re, pickle, os, unidecode
+import numpy as np
 import pandas as pd
 from docx import Document
 from docx.text.paragraph import Paragraph
+from docx.enum.text import WD_BREAK
 from docx.shared import Pt, Cm
-import json, re, pickle, os
-import numpy as np
+from docx.oxml import OxmlElement, ns
 from alive_progress import alive_it
-import unidecode
+from collections import OrderedDict as od
 
 def get_authors(dat):
+    '''Populate author list and match to addressess / emails where possible'''
     def remove_accents(a):
         return unidecode.unidecode(a)
 
@@ -69,7 +72,7 @@ def get_authors(dat):
                             success = True
                             break
                     if not success:
-                        # print(f"Failed to resolve this one: {grp}")
+                        print(f"Failed to resolve this author's affiliation: {grp}")
                         unresolved_auths.append(grp)
 
         else:
@@ -79,13 +82,13 @@ def get_authors(dat):
                 try:
                     unresolved_auths.append([i, "<<Unable to parse email>>", "??", codes[doc_idx]])
                 except:
+                    print(f"couldnt parse author name for {i}. This is a breaking error.")
                     breakpoint()
-        # if "2023.027B" in codes[doc_idx]: breakpoint()
 
     '''Check if any addresses unused'''
     unused_addresses = []
     for doc in auths:
-        if type(doc) != dict: # MESSY
+        if type(doc) != dict: # TODO MESSY
             continue
         for addr in doc["addresses"]:
             if addr not in used_addresses:
@@ -109,13 +112,13 @@ def get_authors(dat):
     df = df.sort_values(by = "auth_decode")
     df = df.drop(columns="auth_decode")
     df = df.drop_duplicates(subset="author", keep="last")
-    # df = df.drop_duplicates(subset="email", keep="last")
     df = df.dropna(subset=["author","email","affil"])
     df = df.fillna("")
     df = df[df["author"] != ""]
     return final_author_list, df
 
 def build_table(df, doc):
+    '''Construct in-document data tables for taxonomy operations'''
     cellwidth_maps = {
         "Operation": Cm(2.75),
         "Rank": Cm(1.8),
@@ -126,19 +129,16 @@ def build_table(df, doc):
         "New parent taxon": Cm(4.5)
     }
 
+    '''Create table, autofit cells'''
     t = doc.add_table(df.shape[0]+1, df.shape[1])
     t.style = 'Table Grid'
-    # t.autofit = False 
-    # t.allow_autofit = False
-    t.autofit = True # RM < FIX 28/11
+    t.autofit = True 
     t.allow_autofit = True
 
     for j in range(df.shape[-1]):
         t.cell(0,j).text = df.columns[j]
         t.cell(0,j).paragraphs[0].runs[0].font.bold = True
-        # if df.columns[j] in cellwidth_maps.keys():
-        #     '''Set cell widths'''
-        #     t.cell(0,j).width = cellwidth_maps[df.columns[j]]
+
     for i in range(df.shape[0]):
         for j in range(df.shape[-1]):
             if "<i>" in str(df.values[i,j]):
@@ -150,7 +150,7 @@ def build_table(df, doc):
             t.cell(i+1,j).paragraphs[0].runs[0].font.name = "Aptos (Body)"
             t.cell(i+1,j).paragraphs[0].runs[0].font.size = Pt(9)
 
-    '''Manually set col widths'''
+    '''Manually set col widths where specified'''
     for col in t.columns:
         for cell in col.cells:
             if col.cells[0].text in cellwidth_maps.keys():
@@ -162,6 +162,7 @@ def build_table(df, doc):
     return t, doc, p
 
 def get_document_font(doc, type):
+    '''Return base font for document element'''
     if type != "table":
         font = doc.styles['Normal'].font
         font.name = "Cambria"
@@ -175,9 +176,7 @@ def get_document_font(doc, type):
 
 
 def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fname, sc_chair_df) -> None:
-    '''Dump results to docx file'''
-    from docx.oxml import OxmlElement, ns
-
+    '''Construct docx summary file'''
     def create_element(name):
         return OxmlElement(name)
 
@@ -205,19 +204,21 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
         else:
             return row[colnam]
 
+    '''Constructors'''
     TAB_CNT = 1
     doc = Document()
     p = doc.add_paragraph()
     p.paragraph_format.line_spacing = 1
     p.paragraph_format.space_after = 0
     doc, font = get_document_font(doc, "normal")
+
     '''Make title & authors'''
     run = p.add_run(f"Summary of taxonomy changes ratified by the International Committee on Taxonomy of Viruses (ICTV) from the {fname.replace('.xlsx','').replace('_',' ')} Subcommittee")
     run.bold = True
     run = p.add_run("\n\n")
+    
     '''Write author list'''
     taxon_df = taxon_df.reset_index().drop(columns="index")
-
     try:
         corr_author_idx = taxon_df[taxon_df["author"] == sc_chair_df["Name"].item()].index[0]    
     except:
@@ -232,7 +233,6 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
 
     taxon_df = taxon_df.iloc[idx].reset_index(drop=True)
     taxon_df["idx"] = taxon_df.index
-    # taxon_df.to_csv(f"{fname.split('.')[0]}/{fname.split('.')[0]}_authors.csv", index=None)
     taxon_df = taxon_df[["author", "email", "affil", "consent","idx"]]
 
     excel_fname = f"{fname.split('.')[0]}/{fname.split('.')[0]}_authors.xlsx"
@@ -302,7 +302,6 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
     docs_sorted = [docs[i] for i in docs_sorted_idxs]
 
     '''Iterate over rest of front matter'''
-    from docx.enum.text import WD_BREAK
     for key in master_out.keys():
         if key == "abstract":
             run = p.add_run()
@@ -348,15 +347,12 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
             p.add_run("\n")
     p.add_run("\n\n\n\n\n\n")
     
-    # for document in alive_it(docs):
     '''PUT SOME BOLOGNESE ON THIS SPAGHETTI CODE'''
-    for document in docs_sorted:
+    for document in alive_it(docs):
         for item in document.items():
             content = item[1]
             if type(content) == list:
                 content = ", ".join(content)
-
-
             content_lst = content.split(" ")
 
             '''If formatting flags span >1 text element, border them properly'''
@@ -399,7 +395,9 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
             for word in content_lst:
                 DONT_LINEBREAK = False
                 if "<<TABLE" in word:
-                    if len(word.split('<<')[-1]) < 4: breakpoint() # raise KeyError(f"NO DOCUMENT CODE COULD BE EXTRACTED FOR {document}")
+                    if len(word.split('<<')[-1]) < 4: 
+                        raise KeyError(f"NO DOCUMENT CODE COULD BE EXTRACTED FOR {document}")
+                    
                     print(f"Processing table for  {word.split('<<')[-1]}")
                     try:
                         tmp = taxon_tbl[taxon_tbl["tp"].str.contains(word.split("<<")[-1].replace("<i>","").replace("</i>",""))]
@@ -409,7 +407,7 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                         if tmp.shape[0] == 0:
                             run = p.add_run("FAILED TO RESOLVE TABLE ")
                         else:
-                            '''THE MULTI TABLE :O'''
+                            '''GENERIC TABLE HANDLING - SPLIT BY OPERATION TYPE'''
                             for operation in tmp["Operation"].value_counts().index:
                                 tmp_smol = tmp[tmp["Operation"] == operation]
                                 tmp_smol = tmp_smol.replace("nan", np.nan)
@@ -422,7 +420,7 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                                 except:
                                     code_match = "<<Couldn't automatically infer species>>"
                                 if tmp_smol.shape[0] > 40: 
-                                    # TODO MAKE TABLE REF, SAVE TO CSV
+                                    '''If table is too large, dump to supplementary csv'''
                                     sup_fname = f"supp_info_tab_{TAB_CNT}.csv"
                                     p.add_run("\n")
                                     run = p.add_run(f"TABLE {TAB_CNT}")
@@ -440,6 +438,7 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                                         tmp_smol[colnam] = tmp_smol.apply(lambda x: rm_italics(x,colnam), axis=1)
                                     tmp_smol.to_csv(f"{fname.split('.')[0]}/{sup_fname}", encoding="utf-8-sig")
                                 else:
+                                    '''If table not too large, embed in doc'''
                                     p.add_run("\n")
                                     run = p.add_run(f"TABLE {TAB_CNT}") 
                                     run.bold = True
@@ -449,7 +448,7 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                                     run = p.add_run(f", {tmp_smol.shape[0]} {operation_printy}*")
                                     p.add_run("\n")
                                     _, doc, p = build_table(tmp_smol, doc)
-                                    font = get_document_font(doc, "normal")
+                                    _ = get_document_font(doc, "normal")
                                 TAB_CNT += 1
                                 DONT_LINEBREAK = True
                     except KeyError:
@@ -489,8 +488,8 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
     p.add_run("\nReferences:\n FILL ME IN PLEASE SC CHAIR") # TODO
     run.bold = True
 
+    '''Pagination, save summary'''
     add_page_number(doc.sections[0].footer.paragraphs[0].add_run())
-
     doc.save(f"{fname.split('.')[0]}/{fname.split('.')[0]}.docx")
 
     '''MAKE SUMMARY EXCEL TABLE'''
@@ -550,23 +549,19 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
     print(f"Finished. Saved data to {fname.split('.')[0]}/{fname.split('.')[0]}.docx")
 
 def get_docs(dat,auths):
+    '''Compile document metadata for summary'''
     final_docs = []
     for key in dat.keys():
         '''Authors'''
         authors = [i for i in auths if i[3] == key] # Auth 1 (email), Auth 2, Auth 3
         for idx, i in enumerate(authors):
             if i[0] in dat[key]["authors"]["corr_author"]:
-                # corr_authors.append(f"{i[0].split('^')[0]} ({i[1]})")
                 authors[idx][0] = f"{i[0].split('^')[0]} ({i[1]})"
         final_authors = ", ".join([i[0].split("^")[0] for i in authors])
 
         '''Excel fname/title'''
         code = dat[key]['code']
-        # if re.search(r'(v[0-9]{1})_', dat[key]["excel_fname"]) or re.search(r'(v[0-9]{1}).', dat[key]["excel_fname"]):
-        #     '''If excel fname has "vx_" in it'''
-        #     fname = f'{".".join(dat[key]["excel_fname"].replace(" ","").split(".")[0:2])}.{".".join(dat[key]["excel_fname"].replace(" ","").split(".")[3:6])}'
-        # else:
-        #     fname = f'{".".join(dat[key]["excel_fname"].replace(" ","").split(".")[0:2])}.{".".join(dat[key]["excel_fname"].replace(" ","").split(".")[4:6])}'
+
         try:
             fname = dat[key]["excel_fname"]
             assert fname != ""
@@ -576,7 +571,7 @@ def get_docs(dat,auths):
             title_for_print = f'<b>{dat[key]["backup_code"]}</b>'
         
 
-        if not "submission_date" in dat[key].keys(): # RM < TODO BODGE
+        if not "submission_date" in dat[key].keys(): # TODO TIDY
             dat[key]["submission_date"] = "<<COULDN'T PARSE DATE>>"
         if not "revision_date" in dat[key].keys():
             dat[key]['revision_date'] = ""
@@ -593,13 +588,13 @@ def get_docs(dat,auths):
             "source": f'*Source / full text: https://ictv.global/proposals/{code}.{fname.split(".")[-2]}.zip'
         }
         final_docs.append(doc_deets)
-        # if "2023.001F" in key: breakpoint() ####################
 
 
     return final_docs
 
 
 def get_tabular(fname):
+    '''Read tables from pickle generated in earlier parser step'''
     def italicise(row, header):
         if pd.isnull(row[header]):
             return np.nan
@@ -631,16 +626,16 @@ def get_tabular(fname):
     return df, master_species_list
 
 def get_sc_chair(fname):
+    '''Read SC chair from csv'''
     df = pd.read_csv("sc_chairs.csv")
     df2 = df[df["Subcommittee"].str.lower().str.contains(fname.lower().replace("_"," ").replace(".json","").replace("2026 ","").replace("+","\+"))]
-    if df2.empty: breakpoint()
     assert not df2.empty, "couldn't match sc chair"
     return df2
 
 def main(fname):
+    '''Entrypoint to make summary doc from json + pickle created in earlier parsers'''
     with open(f"{fname}.json", "r") as f:
         dat = json.loads(f.read())
-    from collections import OrderedDict as od
     dat = od(sorted(dat.items()))
 
     sc_chair_df = get_sc_chair(fname)

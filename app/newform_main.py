@@ -344,11 +344,6 @@ class Strip:
         else:
             return "na"
         
-    # def save_json(self) -> None:
-    #     '''Dump results to machine-readable format'''
-    #     with open(f"{self.out_dir}{self.attribs['Id_code'][0]}.json", "w") as outfile: 
-    #         json.dump(self.attribs, outfile)                
-
     def make_summary(self) -> None:
         '''Dump results to docx file'''
         doc = Document()
@@ -488,19 +483,13 @@ class Strip:
                 for cell_idx, cell in enumerate(row.cells):
                     for para in cell.paragraphs:
                         para_header = "".join([i.text for i in para.runs]).strip(" ")
-
-                        # if "2024.011M" in self.fname and "Abstract" in para_header: breakpoint()
-
                         if para_header in self.section_fns.keys():
                             self.section_fns[para_header](row, cell_idx, row_idx, table)
-                        # else:
-                        #     if "Abstract of Taxonomy Proposal" in para_header: breakpoint()
 
 
-        # err_fname = self.collate_errors()
-        # self.save_json()
-        # self.make_summary()
-        if "abstract" not in self.attribs.keys(): self.attribs["abstract"] = "PARSER ERROR" ###############
+        # err_fname = self.collate_errors() # Optional error logging
+        # self.make_summary()               # Optional mini summary output
+        if "abstract" not in self.attribs.keys(): self.attribs["abstract"] = "PARSER ERROR" 
         return self.attribs, []
     
 def save_json(data, fname) -> None:
@@ -550,7 +539,6 @@ def entry(fname):
     '''Handle errors'''
     error_logs = [log for log in error_logs if not log == "na"]
     if error_logs:
-        # errors_fname = compile_error_logs(error_logs)
         print(f"Finished processing {len(os.listdir(in_dir))} documents with {len(error_logs)} errors.")
     else:
         print(f"Finished processing {len(os.listdir(in_dir))} documents with no errors.")
