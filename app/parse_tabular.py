@@ -37,8 +37,10 @@ def main(out_fname):
     Abolish_taxon_table_starter_text = "><tr><th>Operation</th><th>Rank</th><th>Abolished taxon name</th></tr>"
     Abolish_taxon_table_text = ""
     Move_taxon_table_starter_text = "><tr><th>Operation</th><th>Rank</th><th>Taxon name</th><th>Old parent taxon</th><th>New parent taxon</th></tr>"
+#   Move_taxon_table_starter_text = "><tr><th>Operation</th><th>Rank</th><th>Taxon name</th><th>New parent taxon</th><th>Old parent taxon</th></tr>" # TODO order they want, but this just renames cols and doesnt move data
     Move_taxon_table_text = ""
     MoveRename_taxon_table_starter_text = "><tr><th>Operation</th><th>Rank</th><th>Old taxon name</th><th>Old parent taxon</th><th>New taxon name</th><th>New parent taxon</th></tr>"
+    # MoveRename_taxon_table_starter_text = "><tr><th>Operation</th><th>Rank</th><th>New taxon name</th><th>New parent taxon</th><th>Old taxon name</th><th>Old parent taxon</th></tr>"
     MoveRename_taxon_table_text = ""
     Split_taxon_table_starter_text = "><tr><th>Operation</th><th>Rank</th><th>Old taxon</th><th>New taxon 1</th><th>Virus name</th><th>GenBank accession</th><th>New taxon 2</th><th>Virus name</th><th>GenBank accession</th></tr>"
     Split_taxon_table_text = ""
@@ -397,13 +399,16 @@ def main(out_fname):
                     tmp_df = pd.read_html(f"<table>{table}")
                 tmp_df[0]["tp"] = code
                 master_df = pd.concat([master_df, tmp_df[0]])
+        master_df["Rank"] = master_df["Rank"].str.title() # Capitalise first letter of rank col
 
-        # df = pd.read_html(HTML_text)
-        # for idx, subtable in enumerate(df):
-        #     try:
-        #         subtable["tp"] = fileList[idx].split(".xlsx")[0]
-        #     except: breakpoint()
-        #     master_df = pd.concat([master_df, subtable])
+        '''re-order columns to match desired output'''
+        if "New parent taxon" in master_df.columns:
+            '''Rename taxa table'''
+            cols = list(master_df.columns)
+            new, old = cols.index("New parent taxon"), cols.index("Old parent taxon")
+            cols[old], cols [new] = cols[new], cols[old]
+            master_df = master_df[cols]
+
 
         with open(f"{out_fname}.p", "wb") as f:
             p.dump(master_df, f)

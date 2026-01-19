@@ -46,13 +46,15 @@ class Strip:
     def populate_title(self, row, cell_idx, *_) -> None:
         '''Populate title'''
         try:
-            title_text = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.text.strip().replace(" ","") == ""]
-            title_it_mask = [i.font.italic for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.text.strip().replace(" ","") == ""]
+            title_text = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs] #if not i.text.strip().replace(" ","") == ""]
+            title_it_mask = [i.font.italic for i in row.cells[cell_idx+1].paragraphs[0].runs] #if not i.text.strip().replace(" ","") == ""]
             it_indices = np.argwhere(np.array(title_it_mask) != None)
             for i in it_indices:
+                # title_text[i[0]] = f"<i>{title_text[i[0]]}</i> " if title_text[i[0]][-1] == " " else f"<i>{title_text[i[0]]}</i>"
                 title_text[i[0]] = f"<i>{title_text[i[0]]}</i>"
+
             assert title_text != []
-            self.attribs["title"] = "".join(title_text).replace("</i><i>","") # remove consecutive italic close/opens
+            self.attribs["title"] = "".join(title_text).replace("  "," ").replace("</i><i>","")#.replace("</i> <i>","").replace("  ", " ") # remove consecutive italic close/opens
         except:
             self.attribs["title"] = self.parser_errors["Title"] = self.parser_err_codes[0]
 
@@ -62,11 +64,14 @@ class Strip:
             code = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.text.strip().replace(" ","") == ""]
             assert code != []
             self.attribs["code"] = ".".join("".join(code).split(".")[0:2])
+            self.attribs["backup_code"] = "".join([i.text for i in row.cells[cell_idx+1].paragraphs[0].runs if not i.text.strip().replace(" ","") == ""])
+
         except:
             self.attribs["code"] = ".".join(self.fname.split(".")[0:2])
 
     def populate_authors(self, _row, _cell_idx, row_idx, table) -> None:
         '''Parse author fields incl address and email'''
+
         authors = []
         counter = 2
         while True:
@@ -91,24 +96,32 @@ class Strip:
                             self.parser_errors["author"].append(row_text) 
                 if not row_text == ['MISSING_FIELD', 'MISSING_FIELD', 'MISSING_FIELD', 'MISSING_FIELD']:
                     '''If not just an empty row.'''
-                    authors.append([i.text.replace("\n","") for i in row_text])
+                    authors.append([i.text.replace("\n"," ").replace("  ", "") for i in row_text])
 
                 try:
                     for i in authors:
-                        if i[2] == " " or i[2] == "MISSING_FIELD": breakpoint()
+                        if i[2] == " " or i[2] == "MISSING_FIELD": 
+                            print("WARNING: MISSING AUTHOR FIELD")
+                            # breakpoint()
                 except:
                     print("Error parsing authors")
                     breakpoint()
         try:
             assert authors != []
 
-            self.attribs["authors"] = {
-                "names": [i[0] for i in authors],
-                "addresses": [i[1] for i in authors],
-                "emails": [i[2] for i in authors],
-                "corr_author": [i[0] for i in authors if not i[3] == "MISSING_FIELD" and not i[3] == ""]
+            # self.attribs["authors"] = { # TODO 2024
+            #     "names": [i[0] for i in authors],
+            #     "addresses": [i[1] for i in authors],
+            #     "emails": [i[2] for i in authors],
+            #     "corr_author": [i[0] for i in authors if not i[3] == "MISSING_FIELD" and not i[3] == ""]
+            # }
+            self.attribs["authors"] = { # TODO 2025
+                "names": [f"{' '.join(i[0:2])}" for i in authors],
+                "addresses": [i[2] for i in authors],
+                "emails": [i[3] for i in authors],
+                "corr_author": [i[4] for i in authors if not i[3] == "MISSING_FIELD" and not i[3] == ""]
             }
-            # breakpoint()
+
         except:
             breakpoint()
             self.attribs["authors"] = self.parser_errors["Authors"] = self.parser_err_codes[1]
@@ -169,7 +182,7 @@ class Strip:
             if subm_date[0] == "DD/MM/YYYY":
                 self.attribs["submission_date"] = "- "
             else:
-                self.attribs["submission_date"] = " ".join(subm_date) 
+                self.attribs["submission_date"] = "".join(subm_date) 
         except:
             self.attribs["submission_date"] = self.parser_errors["Submission_date"] = self.parser_err_codes[1]
 
@@ -274,7 +287,7 @@ class Strip:
             if rev_date[0] == "DD/MM/YYYY":
                 self.attribs["revision_date"] = "-"
             else:
-                self.attribs["revision_date"] = rev_date
+                self.attribs["revision_date"] = "".join(rev_date)
         except:
             self.attribs["revision_date"] = self.parser_errors["Revision_date"] = self.parser_err_codes[1]
 
@@ -292,8 +305,10 @@ class Strip:
                     its = i.font.italic
                     if its:
                         text = f"<i>{text}</i>"
-                    abstract.append(text)
+                    abstract.append(text) 
+                abstract.append("\n")
 
+            del abstract[-1] # Kill last newline
             '''Make flag to indicate whether sec 2 or 3 was filled in'''
             if self.which_section == 2:
                 self.attribs["Tp_type"] = ["Non-taxonomic proposal"]
@@ -302,7 +317,8 @@ class Strip:
                 assert not "Tp_type" in self.attribs.keys(), "Error: User has filled in both section 2 + 3"
                 assert abstract != []
                 self.attribs["Tp_type"] = ["Taxonomic proposal"]
-            self.attribs["abstract"] = "".join(abstract).replace("  "," ").replace(":",": ")
+            '''Fix floating italics'''
+            self.attribs["abstract"] = "".join(abstract).replace("  "," ").replace(":",": ").replace("</i><i>","")
         except:
             self.attribs["abstract"] = self.parser_errors["Tp_abstract"] = self.parser_err_codes[0]
 
@@ -371,6 +387,7 @@ class Strip:
                         if its:
                             text = f"<i>{text}</i>"
                         proposal.append(text)
+                        breakpoint()
 
                 '''Make flag to indicate whether sec 2 or 3 was filled in'''
                 assert proposal != []
@@ -405,16 +422,21 @@ class Strip:
                 if [i.text.replace("Taxonomic level(s) affected:","").replace("Description of current taxonomy:","").replace("Proposed taxonomic change(s):","").replace("Justification:","").replace("\n", "").strip().replace(" ","") for i in table.rows[row_idx +1].cells] == ['']:
                     return # RM < TODO UPDATE REPLACES WITH NEW FORM FORMAT
                 for para in table.rows[row_idx + 1].cells[0].paragraphs:
-                    for i in para.runs:
-                        text = i.text 
-                        its = i.font.italic
-                        if its:
-                            text = f"<i>{text}</i>"
-                        tp_text.append(text)
+                    for run in para.runs:
+                        text = run.text 
+                        its = run.font.italic
+                        for word in text.split(" "):
+                            word_to_save = word
+                            if its:
+                                if word[-1] == " ":
+                                    text = f"<i>{word_to_save.split()[0]}</i>"
+                                word_to_save = f"<i>{word_to_save}</i>"
+                            tp_text.append(word_to_save)
+                            # if "taxonomy" in word_to_save: breakpoint()
 
                 '''Make flag to indicate whether sec 2 or 3 was filled in'''
                 assert tp_text != []
-                self.attribs["proposal_text"] = "".join(tp_text).replace("</i><i>","")  
+                self.attribs["proposal_text"] = "".join(tp_text) # .replace("</i><i>","") # TODO 12/01 WHY WAS THIS HERE  
             except:
                 self.attribs["proposal_text"] = self.parser_errors["taxonomy_proposal"] = self.parser_err_codes[0]
 
@@ -465,15 +487,15 @@ class Strip:
             for row_idx, row in enumerate(table.rows):
                 for cell_idx, cell in enumerate(row.cells):
                     for para in cell.paragraphs:
-                        # para.text = property(lambda th: GetParagraphText(th))
                         para_header = "".join([i.text for i in para.runs]).strip(" ")
+
+                        # if "2024.011M" in self.fname and "Abstract" in para_header: breakpoint()
+
                         if para_header in self.section_fns.keys():
                             self.section_fns[para_header](row, cell_idx, row_idx, table)
                         # else:
                         #     if "Abstract of Taxonomy Proposal" in para_header: breakpoint()
-                        # if para_header == "Abstract":
-                        #     '''Increment index for measuring which section's abstract is being parsed'''
-                        #     self.which_section = 3
+
 
         # err_fname = self.collate_errors()
         # self.save_json()
@@ -517,7 +539,10 @@ def entry(fname):
     for file in os.listdir(in_dir):
         strip = Strip(file, in_dir, out_dir, do_optional) 
         data, errs = strip.main()
-        all_data[data["code"]] = data
+
+        try:
+            all_data[data["code"]] = data
+        except: breakpoint()
         error_logs.append(errs)
 
     save_json(all_data, fname)

@@ -71,7 +71,6 @@ def get_authors(dat):
                     if not success:
                         # print(f"Failed to resolve this one: {grp}")
                         unresolved_auths.append(grp)
-                        
 
         else:
             '''If len email != len author, just add authors with no email or addr'''
@@ -129,8 +128,11 @@ def build_table(df, doc):
 
     t = doc.add_table(df.shape[0]+1, df.shape[1])
     t.style = 'Table Grid'
-    t.autofit = False 
-    t.allow_autofit = False
+    # t.autofit = False 
+    # t.allow_autofit = False
+    t.autofit = True # RM < FIX 28/11
+    t.allow_autofit = True
+
     for j in range(df.shape[-1]):
         t.cell(0,j).text = df.columns[j]
         t.cell(0,j).paragraphs[0].runs[0].font.bold = True
@@ -140,7 +142,7 @@ def build_table(df, doc):
     for i in range(df.shape[0]):
         for j in range(df.shape[-1]):
             if "<i>" in str(df.values[i,j]):
-                t.cell(i+1,j).text = str(df.values[i,j]).replace("<i>","")
+                t.cell(i+1,j).text = str(df.values[i,j]).replace("<i>","").replace("</i>","")
                 t.cell(i+1,j).paragraphs[0].runs[0].font.italic = True
             else:
                 t.cell(i+1,j).text = str(df.values[i,j])
@@ -197,6 +199,12 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
         run._r.append(instrText)
         run._r.append(fldChar2)
 
+    def rm_italics(row, colnam):
+        if type(row[colnam]) == str:
+            return row[colnam].replace("<i>", "").replace("</i>","")
+        else:
+            return row[colnam]
+
     TAB_CNT = 1
     doc = Document()
     p = doc.add_paragraph()
@@ -204,7 +212,7 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
     p.paragraph_format.space_after = 0
     doc, font = get_document_font(doc, "normal")
     '''Make title & authors'''
-    run = p.add_run(f"Summary of taxonomy changes ratified by the International Committee on Taxonomy of Viruses (ICTV) from the {fname.replace('.xlsx','').replace('_',' ')} Subcommittee, 2024")
+    run = p.add_run(f"Summary of taxonomy changes ratified by the International Committee on Taxonomy of Viruses (ICTV) from the {fname.replace('.xlsx','').replace('_',' ')} Subcommittee")
     run.bold = True
     run = p.add_run("\n\n")
     '''Write author list'''
@@ -213,7 +221,6 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
     try:
         corr_author_idx = taxon_df[taxon_df["author"] == sc_chair_df["Name"].item()].index[0]    
     except:
-        # breakpoint()
         print("CORR AUTHOR NOT FOUND IN AUTHOR LIST: adding author manually")
         sc_chair_df = sc_chair_df.rename(columns={"Name": "author", "Email": "email", "Affiliation": "affil"})
         sc_chair_df = sc_chair_df[["author", "email", "affil"]]
@@ -248,7 +255,7 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
             if "taxon" in str(col).lower():
                 cell_format.set_italic()
             worksheet.set_column(idx, idx, max_len, cell_format)  # set column width
-    writer.save()
+    writer.close()
 
     cnt, affil_lst, seen_affils = 0, [], []
     for row in taxon_df.values.tolist():
@@ -289,7 +296,11 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
     font = get_document_font(doc, "normal")
     p.add_run("\n")
 
+    '''Get TP codes and sort'''
     CODES = [i["code"].replace("<b>","").replace("</b>","") for i in docs]
+    docs_sorted_idxs = np.argsort([i["code"].split(".")[1] for i in docs])
+    docs_sorted = [docs[i] for i in docs_sorted_idxs]
+
     '''Iterate over rest of front matter'''
     from docx.enum.text import WD_BREAK
     for key in master_out.keys():
@@ -326,20 +337,48 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                 run.italic = False          
             run = p.add_run(" ")  
         p.add_run("\n")
+        if key == "main_text_banner":
+            run = p.add_run("Contents")
+            run.bold = True
+            run = p.add_run("\n")
+            run.bold = False
+            for tp in docs_sorted:
+                p.add_run(tp["code"].replace("<b>","").replace("</b>",""))
+                p.add_run("\n")
+            p.add_run("\n")
     p.add_run("\n\n\n\n\n\n")
     
-    docs_sorted_idxs = np.argsort([i["code"].split(".")[1] for i in docs])
-    docs_sorted = [docs[i] for i in docs_sorted_idxs]
     # for document in alive_it(docs):
+    '''PUT SOME BOLOGNESE ON THIS SPAGHETTI CODE'''
     for document in docs_sorted:
         for item in document.items():
             content = item[1]
             if type(content) == list:
                 content = ", ".join(content)
 
-            # content_lst = "\n\n".join(".".join(i for i in content.split(" ")).split(".")).split("\n\n")
 
             content_lst = content.split(" ")
+
+            '''If formatting flags span >1 text element, border them properly'''
+            for idx, word in enumerate(content_lst):
+                if "<i>" in word and not "</i>" in word:
+                    if word[-3] == "<i>":
+                        ...
+                    else:
+                        content_lst[idx] = f'{word}</i>'
+                elif "</i>" in word and not "<i>" in word:
+                    if word[0:4] == "</i>":
+                        content_lst[idx-1] = f'<i>{content_lst[idx-1].replace("<i>","").replace("</i>","")}</i>'
+                    else:
+                        content_lst[idx] = f'<i>{word}'
+                if "<b>" in word and not "</b>" in word:
+                    content_lst[idx] = f'{word}</b>'
+                elif "</b>" in word and not "<b>" in word:
+                    content_lst[idx] = f'<b>{word}'
+
+                if "<i></i>" in word:
+                    '''This is absolutely disgusting'''
+                    content_lst[idx+1] = f'<i>{content_lst[idx+1].replace("<i>","").replace("</i>","")}</i>'
 
             '''Manually bold out chosen headings'''
             heading_words = {"Taxonomic": ["rank",3], "Description": ["of",4], "Proposed": ["taxonomic",3], "Justification": ["",0]}
@@ -356,8 +395,6 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                         if heading_words[key][0] in content_lst[idx+1]:
                             for cnt in range(1,heading_words[key][1]):
                                 content_lst[idx+cnt] = f"<b><i>{content_lst[idx+cnt]}</i></b>"
-                        # if "Justification" in word: breakpoint()
-
 
             for word in content_lst:
                 DONT_LINEBREAK = False
@@ -370,7 +407,6 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                         tmp = tmp.dropna(axis=1, how="all") # rm all cols with nans
                         tmp = tmp.fillna("")
                         if tmp.shape[0] == 0:
-                            breakpoint()
                             run = p.add_run("FAILED TO RESOLVE TABLE ")
                         else:
                             '''THE MULTI TABLE :O'''
@@ -400,7 +436,9 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                                     if not os.path.exists(fname.split('.')[0]):
                                         os.mkdir(fname.split('.')[0])
                                     tmp_smol["TP"] = word.split("<<")[-1].replace("<i>","").replace("</i>","")
-                                    tmp_smol.to_csv(f"{fname.split('.')[0]}/{sup_fname}")
+                                    for colnam in tmp_smol.columns:
+                                        tmp_smol[colnam] = tmp_smol.apply(lambda x: rm_italics(x,colnam), axis=1)
+                                    tmp_smol.to_csv(f"{fname.split('.')[0]}/{sup_fname}", encoding="utf-8-sig")
                                 else:
                                     p.add_run("\n")
                                     run = p.add_run(f"TABLE {TAB_CNT}") 
@@ -417,20 +455,6 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                     except KeyError:
                         run = p.add_run("FAILED TO RESOLVE TABLE")
                     continue
-
-                # if "i>" in word:
-                #     run = p.add_run(word.replace("<i>", "").replace("</i>",""))
-                #     run.italic = True
-                # elif "b>" in word:
-                #     run = p.add_run(word.replace("<b>", "").replace("</b>",""))
-                #     run.bold = True
-                # elif "b>" in word and "i>" in word:# Override bold italics with just bold
-                #     run = p.add_run(word.replace("<b>", "").replace("</b>","").replace("<i>", "").replace("</i>",""))
-                #     run.bold = True
-                #     # run.italic = True
-                # else:
-                #     run = p.add_run(word)
-                #     run.italic = False  
 
                 run.italic = False
                 BOLD = False
@@ -457,7 +481,7 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
 
     run = p.add_run("Keywords:")
     p.add_run("\n")
-    for word in ", ".join(master_species_lst):
+    for word in "; ".join(master_species_lst):
         run = p.add_run(word)
         run.italic = True
     p.add_run("\n")
@@ -469,17 +493,13 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
 
     doc.save(f"{fname.split('.')[0]}/{fname.split('.')[0]}.docx")
 
-    def rm_italics(row, colnam):
-        if type(row[colnam]) == str:
-            return row[colnam].replace("<i>", "")
-        else:
-            return row[colnam]
-
+    '''MAKE SUMMARY EXCEL TABLE'''
     excel_fname = f"{fname.split('.')[0]}/{fname.split('.')[0]}_all_supp.xlsx"
     if os.path.exists(excel_fname):
         os.remove(excel_fname)
     writer = pd.ExcelWriter(excel_fname)
     workbook = writer.book
+
     for csv_fname in os.listdir(f"{fname.split('.')[0]}/"):
         if ".csv" in csv_fname and not "authors" in csv_fname:
             tmp = pd.read_csv(f"{fname.split('.')[0]}/{csv_fname}",index_col=0)
@@ -501,7 +521,32 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                     cell_format.set_italic()
                 worksheet.set_column(idx, idx, max_len, cell_format)  # set column width
 
-    writer.save()
+    writer.close()
+
+    '''MAKE NEW SUMMARY EXCEL TABLE'''
+    excel_fname = f"{fname.split('.')[0]}/{fname.split('.')[0]}_all_tables.xlsx"
+    if os.path.exists(excel_fname):
+        os.remove(excel_fname)
+    writer = pd.ExcelWriter(excel_fname)
+    workbook = writer.book
+    tmp = taxon_tbl.copy()
+    for colnam in tmp.columns:
+        tmp[colnam] = tmp.apply(lambda x: rm_italics(x,colnam), axis=1)
+    sheetname = "1"
+    tmp.to_excel(writer, sheet_name=sheetname, index=False)
+    worksheet = writer.sheets[sheetname]
+    for idx, col in enumerate(tmp):
+        series = tmp[col]
+        max_len = max((
+            series.astype(str).map(len).max(),  # len of largest item
+            len(str(series.name))  # len of column name/header
+            )) + 1  # adding a little extra space
+        cell_format = workbook.add_format()
+        if "taxon" in col.lower():
+            cell_format.set_italic()
+        worksheet.set_column(idx, idx, max_len, cell_format)  # set column width
+    
+    writer.close()
     print(f"Finished. Saved data to {fname.split('.')[0]}/{fname.split('.')[0]}.docx")
 
 def get_docs(dat,auths):
@@ -522,10 +567,14 @@ def get_docs(dat,auths):
         #     fname = f'{".".join(dat[key]["excel_fname"].replace(" ","").split(".")[0:2])}.{".".join(dat[key]["excel_fname"].replace(" ","").split(".")[3:6])}'
         # else:
         #     fname = f'{".".join(dat[key]["excel_fname"].replace(" ","").split(".")[0:2])}.{".".join(dat[key]["excel_fname"].replace(" ","").split(".")[4:6])}'
-        fname = dat[key]["excel_fname"]
-
-        if fname == "":
-            fname = f"{code}_NO EXCEL FILE LINK FOUND"
+        try:
+            fname = dat[key]["excel_fname"]
+            assert fname != ""
+            title_for_print = f'<b>{code}.{fname.split(".")[-2]}</b>'
+        except:
+            fname = dat[key]["backup_code"]
+            title_for_print = f'<b>{dat[key]["backup_code"]}</b>'
+        
 
         if not "submission_date" in dat[key].keys(): # RM < TODO BODGE
             dat[key]["submission_date"] = "<<COULDN'T PARSE DATE>>"
@@ -535,17 +584,15 @@ def get_docs(dat,auths):
         '''Tabular'''
         table = f"<<TABLE<<{code}"
         doc_deets = {
-            "code": f"<b>{fname.replace('.xlsx','')}</b>",
+            "code": title_for_print,
             "title": f"<b>Title:</b> {dat[key]['title']}",
             "authors": f"<b>Authors:</b> {final_authors}",
-            "summary": f"<b>Summary:</b> {dat[key]['abstract']}",
+            "summary": f"<b>Summary:</b>\n{dat[key]['abstract']}",
             "submitted": f"<i>Submitted:</i> {dat[key]['submission_date'] if not dat[key]['submission_date'] == '' else '<<COULDNT PARSE SUBMISSION DATE>>'}; <i>Revised:</i> {dat[key]['revision_date'] if not dat[key]['revision_date'] == '' else 'N/A'}",
-            # "revised": f"<i>Revised:</i> {dat[key]['revision_date'] if not dat[key]['revision_date'] == '' else 'N/A'}",
             "table": table,
-            "source": f'*Source / full text: <https://ictv.global/proposals/{fname.replace(".xlsx","")}.zip>'
+            "source": f'*Source / full text: https://ictv.global/proposals/{code}.{fname.split(".")[-2]}.zip'
         }
         final_docs.append(doc_deets)
-
         # if "2023.001F" in key: breakpoint() ####################
 
 
@@ -557,7 +604,7 @@ def get_tabular(fname):
         if pd.isnull(row[header]):
             return np.nan
         else:
-            return f'<i>{row[header]}'
+            return f'<i>{row[header]}</i>'
     def flatten(xss):
         return [x for xs in xss for x in xs]
  
@@ -585,7 +632,7 @@ def get_tabular(fname):
 
 def get_sc_chair(fname):
     df = pd.read_csv("sc_chairs.csv")
-    df2 = df[df["Subcommittee"].str.lower().str.contains(fname.lower().replace("_"," ").replace(".json","").replace("2024 ",""))]
+    df2 = df[df["Subcommittee"].str.lower().str.contains(fname.lower().replace("_"," ").replace(".json","").replace("2026 ","").replace("+","\+"))]
     if df2.empty: breakpoint()
     assert not df2.empty, "couldn't match sc chair"
     return df2
