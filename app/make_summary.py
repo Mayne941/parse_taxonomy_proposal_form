@@ -1,8 +1,12 @@
 import json, re, pickle, os, unidecode
 import numpy as np
 import pandas as pd
+from datetime import datetime as dt
+from dateutil.parser import parse
+import docx
 from docx import Document
 from docx.text.paragraph import Paragraph
+from docx.enum.dml import MSO_THEME_COLOR_INDEX
 from docx.enum.text import WD_BREAK
 from docx.shared import Pt, Cm
 from docx.oxml import OxmlElement, ns
@@ -99,6 +103,9 @@ def get_authors(dat):
     '''Make list of resolved authors with contact details, cast to df'''
     final_author_list = []
     for idx, lst in enumerate(resolved_auths + unresolved_auths):
+        if lst[0] == " " and lst[1] == "" and lst[2] == "":
+            '''Where author has put an empty space in the name field'''
+            continue
         try:
             final_author_list.append([f"{lst[0]}", lst[1], f"{lst[2].replace(';','')}", lst[3]])
         except:
@@ -109,8 +116,11 @@ def get_authors(dat):
     try:
         df["auth_decode"] = df["author"].apply(remove_accents)
     except: breakpoint()
-    df = df.sort_values(by = "auth_decode")
+
+    df["surname"] = df.apply(lambda x: x["auth_decode"].strip().split(" ")[-1], axis=1)
+    df = df.sort_values(by = "surname")
     df = df.drop(columns="auth_decode")
+    df = df.drop(columns="surname")
     df = df.drop_duplicates(subset="author", keep="last")
     df = df.dropna(subset=["author","email","affil"])
     df = df.fillna("")
@@ -204,6 +214,50 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
         else:
             return row[colnam]
 
+    def add_bookmark(paragraph, bookmark_text, bookmark_name, BOLD=False, ITALIC=False):
+        run = paragraph.add_run()
+        if BOLD:
+            run.bold = True
+        if ITALIC:
+            run.italic = True
+
+        start = docx.oxml.shared.OxmlElement('w:bookmarkStart')
+        start.set(docx.oxml.ns.qn('w:id'), '0')
+        start.set(docx.oxml.ns.qn('w:name'), bookmark_name)
+        run._r.append(start)
+
+        text = docx.oxml.OxmlElement('w:r')
+        text.text = bookmark_text
+        run._r.append(text)
+
+        end = docx.oxml.shared.OxmlElement('w:bookmarkEnd')
+        end.set(docx.oxml.ns.qn('w:id'), '0')
+        end.set(docx.oxml.ns.qn('w:name'), bookmark_name)
+        run._r.append(end)
+        return run
+
+    def add_link(paragraph, link_to, text, tool_tip=None):
+        # create hyperlink node
+        hyperlink = docx.oxml.shared.OxmlElement('w:hyperlink')
+
+        # set attribute for link to bookmark
+        hyperlink.set(docx.oxml.shared.qn('w:anchor'), link_to,)
+
+        if tool_tip is not None:
+            # set attribute for link to bookmark
+            hyperlink.set(docx.oxml.shared.qn('w:tooltip'), tool_tip,)
+
+        new_run = docx.oxml.shared.OxmlElement('w:r')
+        rPr = docx.oxml.shared.OxmlElement('w:rPr')
+        new_run.append(rPr)
+        new_run.text = text
+        hyperlink.append(new_run)
+        r = paragraph.add_run()
+        r._r.append(hyperlink)
+        r.font.name = "Calibri"
+        r.font.color.theme_color = MSO_THEME_COLOR_INDEX.HYPERLINK
+        r.font.underline = True
+
     '''Constructors'''
     TAB_CNT = 1
     doc = Document()
@@ -211,6 +265,8 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
     p.paragraph_format.line_spacing = 1
     p.paragraph_format.space_after = 0
     doc, font = get_document_font(doc, "normal")
+    bookmarks = []
+    bookmark_idx = 0
 
     '''Make title & authors'''
     run = p.add_run(f"Summary of taxonomy changes ratified by the International Committee on Taxonomy of Viruses (ICTV) from the {fname.replace('.xlsx','').replace('_',' ')} Subcommittee")
@@ -229,12 +285,13 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
         taxon_df = pd.concat([taxon_df, sc_chair_df])
         corr_author_idx = taxon_df.shape[0] - 1
 
+    '''Create new index where SC chair is first'''
     idx = [corr_author_idx] + [i for i in range(len(taxon_df)) if i != corr_author_idx]
-
     taxon_df = taxon_df.iloc[idx].reset_index(drop=True)
     taxon_df["idx"] = taxon_df.index
     taxon_df = taxon_df[["author", "email", "affil", "consent","idx"]]
 
+    '''Save authors to excel file for SC chairs to amend'''
     excel_fname = f"{fname.split('.')[0]}/{fname.split('.')[0]}_authors.xlsx"
     if os.path.exists(excel_fname): # TODO BREAK THIS INTO FUNCTION AS COPIED FROM BELOW
         os.remove(excel_fname)
@@ -257,6 +314,7 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
             worksheet.set_column(idx, idx, max_len, cell_format)  # set column width
     writer.close()
 
+    '''Build affiliation indices for suuperscript notes in author list'''
     cnt, affil_lst, seen_affils = 0, [], []
     for row in taxon_df.values.tolist():
         if row[2] == "??":
@@ -341,7 +399,7 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
             run.bold = True
             run = p.add_run("\n")
             run.bold = False
-            for tp in docs_sorted:
+            for content_idx, tp in enumerate(docs_sorted):
                 p.add_run(tp["code"].replace("<b>","").replace("</b>",""))
                 p.add_run("\n")
             p.add_run("\n")
@@ -463,7 +521,14 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
                 if "<i>" in word and "</i>" in word:
                     ITALIC = True
 
-                run = p.add_run(word.replace("<b>", "").replace("</b>","").replace("<i>", "").replace("</i>",""))
+                if item[0] == "code": 
+                    '''If section title, make it a bookmark'''
+                    bookmark_name = f"BOOKMARK_{document['code'].split('.')[1]}_{bookmark_idx}" # Has a separate idx to avoid dupes in cases where multiple years per doc
+                    run = add_bookmark(p, word.replace("<b>", "").replace("</b>","").replace("<i>", "").replace("</i>",""), bookmark_name, BOLD, ITALIC)
+                    bookmarks.append(bookmark_name)
+                    bookmark_idx += 1
+                else:
+                    run = p.add_run(word.replace("<b>", "").replace("</b>","").replace("<i>", "").replace("</i>",""))
                 if BOLD:
                     run.bold = True
                 if ITALIC:
@@ -487,6 +552,12 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
 
     p.add_run("\nReferences:\n FILL ME IN PLEASE SC CHAIR") # TODO
     run.bold = True
+    p.add_run("\n\n")
+
+    '''Make contents with links'''
+    for content_idx, tp in enumerate(docs_sorted):
+        add_link(p, bookmarks[content_idx],tp["code"].replace("<b>","").replace("</b>",""))
+        p.add_run("\n")
 
     '''Pagination, save summary'''
     add_page_number(doc.sections[0].footer.paragraphs[0].add_run())
@@ -550,6 +621,13 @@ def build_word_doc(master_out, docs, taxon_df, taxon_tbl, master_species_lst, fn
 
 def get_docs(dat,auths):
     '''Compile document metadata for summary'''
+    def parse_date(date_str):
+        try:
+            date_obj = parse(date_str, fuzzy=True)
+            return date_obj.strftime("%d/%m/%Y")
+        except:
+            return "—"
+        
     final_docs = []
     for key in dat.keys():
         '''Authors'''
@@ -583,9 +661,12 @@ def get_docs(dat,auths):
             "title": f"<b>Title:</b> {dat[key]['title']}",
             "authors": f"<b>Authors:</b> {final_authors}",
             "summary": f"<b>Summary:</b>\n{dat[key]['abstract']}",
-            "submitted": f"<i>Submitted:</i> {dat[key]['submission_date'] if not dat[key]['submission_date'] == '' else '<<COULDNT PARSE SUBMISSION DATE>>'}; <i>Revised:</i> {dat[key]['revision_date'] if not dat[key]['revision_date'] == '' else 'N/A'}",
+            # "submitted": f"<i>Submitted:</i> {dat[key]['submission_date'] if not dat[key]['submission_date'] == '' else '<<COULDNT PARSE SUBMISSION DATE>>'}; <i>Revised:</i> {dat[key]['revision_date'] if not dat[key]['revision_date'] == '' else 'N/A'}",
+            "submitted": f"<i>Submitted:</i> {parse_date(dat[key]['submission_date'])}; <i>Revised:</i> {parse_date(dat[key]['revision_date'])}",
+
             "table": table,
-            "source": f'*Source / full text: https://ictv.global/proposals/{code}.{fname.split(".")[-2]}.zip'
+            # "source": f'*Source / full text: https://ictv.global/proposals/{code}.{fname.split(".")[-2]}.zip'
+            "source": f"" # TODO < Edited out for pre-ratification 230126
         }
         final_docs.append(doc_deets)
 

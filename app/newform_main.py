@@ -46,15 +46,14 @@ class Strip:
     def populate_title(self, row, cell_idx, *_) -> None:
         '''Populate title'''
         try:
-            title_text = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs] #if not i.text.strip().replace(" ","") == ""]
-            title_it_mask = [i.font.italic for i in row.cells[cell_idx+1].paragraphs[0].runs] #if not i.text.strip().replace(" ","") == ""]
+            title_text = [i.text for i in row.cells[cell_idx+1].paragraphs[0].runs] 
+            title_it_mask = [i.font.italic for i in row.cells[cell_idx+1].paragraphs[0].runs] 
             it_indices = np.argwhere(np.array(title_it_mask) != None)
             for i in it_indices:
-                # title_text[i[0]] = f"<i>{title_text[i[0]]}</i> " if title_text[i[0]][-1] == " " else f"<i>{title_text[i[0]]}</i>"
                 title_text[i[0]] = f"<i>{title_text[i[0]]}</i>"
 
             assert title_text != []
-            self.attribs["title"] = "".join(title_text).replace("  "," ").replace("</i><i>","")#.replace("</i> <i>","").replace("  ", " ") # remove consecutive italic close/opens
+            self.attribs["title"] = "".join(title_text).replace("  "," ").replace("</i><i>","")
         except:
             self.attribs["title"] = self.parser_errors["Title"] = self.parser_err_codes[0]
 
@@ -102,20 +101,13 @@ class Strip:
                     for i in authors:
                         if i[2] == " " or i[2] == "MISSING_FIELD": 
                             print("WARNING: MISSING AUTHOR FIELD")
-                            # breakpoint()
                 except:
                     print("Error parsing authors")
                     breakpoint()
         try:
             assert authors != []
 
-            # self.attribs["authors"] = { # TODO 2024
-            #     "names": [i[0] for i in authors],
-            #     "addresses": [i[1] for i in authors],
-            #     "emails": [i[2] for i in authors],
-            #     "corr_author": [i[0] for i in authors if not i[3] == "MISSING_FIELD" and not i[3] == ""]
-            # }
-            self.attribs["authors"] = { # TODO 2025
+            self.attribs["authors"] = { # Update for 2026 ver
                 "names": [f"{' '.join(i[0:2])}" for i in authors],
                 "addresses": [i[2] for i in authors],
                 "emails": [i[3] for i in authors],
@@ -382,7 +374,7 @@ class Strip:
                         if its:
                             text = f"<i>{text}</i>"
                         proposal.append(text)
-                        breakpoint()
+                        # breakpoint()
 
                 '''Make flag to indicate whether sec 2 or 3 was filled in'''
                 assert proposal != []

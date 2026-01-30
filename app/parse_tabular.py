@@ -89,18 +89,18 @@ def main(out_fname):
     # Identify which Excel spreadsheet format is being used - assume all of same type
     # New_Excel_format = input("2024 format (Y/N)? (So know which sheet to input)").lower()
     # New_Excel_format = "n"  #TODO RM HARD CODED FOR TEST
-    print("I've assumed we're using the 2024 format!")
+    # print("I've assumed we're using the 2024 format!")
     New_Excel_format = "y"
     for file in fileList:
         if New_Excel_format == "n":
             sheet = 0
         else:
             sheet = 1
-        xls = pd.ExcelFile(f"{ExcelPath}{file}")
         try:
+            xls = pd.ExcelFile(f"{ExcelPath}{file}")
             df = pd.read_excel(xls, sheet_name=sheet)
-        except: 
-            raise SystemError(f"COULDNT OPEN FILE {file}")
+        except Exception as e: 
+            raise SystemError(f"COULDNT OPEN FILE {file}, error: {e}")
         df.to_csv(f"{CsvPath}output.csv", mode="a", encoding="utf-8")       
     with open (f"{CsvPath}output.csv", encoding="utf-8") as csvfile:
         readcsv = csv.reader(csvfile, delimiter=',')
